@@ -41,6 +41,10 @@ async function main() {
   try { data = JSON.parse(input); } catch { /* stdin 可能为空 */ }
 
   const hookEvent = data.hook_event_name || 'Stop';
+
+  // 工具调用失败不发通知
+  if (hookEvent === 'PostToolUseFailure') return;
+
   const cwd = data.cwd || process.cwd();
   const type = resolveEventType(hookEvent, {});
   const fields = buildFields(hookEvent, data);

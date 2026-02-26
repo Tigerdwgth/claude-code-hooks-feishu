@@ -122,7 +122,7 @@ async function main() {
   const shCmd = (script) => path.join(hooksBase, script);
 
   if (config.hooks.notify) {
-    for (const event of ['Stop', 'Notification', 'PostToolUseFailure']) {
+    for (const event of ['Stop', 'Notification']) {
       if (!claudeSettings.hooks[event]) claudeSettings.hooks[event] = [];
       const existing = claudeSettings.hooks[event].find(h =>
         h.hooks?.some(hh => hh.command?.includes('claude-hooks-feishu'))
