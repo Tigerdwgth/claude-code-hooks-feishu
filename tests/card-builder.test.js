@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { buildStopCard, buildPermissionCard, buildStatusUpdateCard } = require('../lib/card-builder');
 
-test('buildStopCard contains reply hint', () => {
+test('buildStopCard contains buttons and reply hint', () => {
   const card = buildStopCard({
     requestId: 'req-001',
     sessionId: 'sess-1',
@@ -15,7 +15,8 @@ test('buildStopCard contains reply hint', () => {
   assert.strictEqual(parsed.header.template, 'green');
   const content = JSON.stringify(parsed);
   assert.ok(content.includes('Task completed successfully'));
-  assert.ok(content.includes('直接回复消息即可下达新指令'));
+  assert.ok(content.includes('发送指令'));
+  assert.ok(content.includes('@机器人'));
 });
 
 test('buildStopCard includes full long message without truncation', () => {
@@ -30,7 +31,7 @@ test('buildStopCard includes full long message without truncation', () => {
   assert.ok(content.includes(longMsg), '应包含完整长消息');
 });
 
-test('buildPermissionCard contains reply instructions', () => {
+test('buildPermissionCard contains buttons and reply hint', () => {
   const card = buildPermissionCard({
     requestId: 'req-003',
     sessionId: 'sess-3',
