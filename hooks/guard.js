@@ -136,7 +136,7 @@ async function main() {
   }
 
   // 等待用户响应，超时60秒默认拦截
-  const response = await pollResponse(requestId, { timeoutMs: 60000, intervalMs: 500 });
+  const response = await pollResponse(requestId, { timeoutMs: 86400000, intervalMs: 500 });
 
   if (response && response.action === 'allow') {
     process.exit(0);

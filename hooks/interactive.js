@@ -120,7 +120,7 @@ async function main() {
     }
   }
 
-  const timeoutMs = hookEvent === 'Stop' ? 300000 : 120000;
+  const timeoutMs = 86400000; // 24小时，等用户回复
   const response = await pollResponse(requestId, { timeoutMs, intervalMs: 500 });
 
   const result = processResponse(hookEvent, response);
