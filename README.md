@@ -4,11 +4,20 @@ Claude Code 飞书通知 hooks —— 任务完成通知、危险命令拦截告
 
 ## 安装
 
+### 方式一：npx 一键安装（推荐）
+
 ```bash
 npx claude-code-hooks-feishu
 ```
 
-交互式向导会引导你完成配置。
+### 方式二：从 GitHub 安装
+
+```bash
+git clone https://github.com/Tigerdwgth/claude-code-hooks-feishu.git
+cd claude-code-hooks-feishu && node bin/cli.js
+```
+
+交互式向导会自动完成所有配置（包括 `~/.claude/settings.json`），无需手动编辑任何文件。
 
 ## 功能
 
@@ -20,6 +29,17 @@ npx claude-code-hooks-feishu
 | 危险拦截 | PreToolUse (Bash) | 拦截 rm -rf 等危险命令 | ✅ |
 | Python 格式化 | PostToolUse (Edit/Write) | 自动格式化 .py 文件 | ❌ |
 | Commit 审查 | PreToolUse (Bash) | git commit 前检查代码风格 | ❌ |
+
+## 通知详情
+
+每条通知包含完整上下文信息：
+
+| 事件 | 包含字段 |
+|------|---------|
+| 任务完成 | 项目目录、时间、会话ID、Claude回复摘要（前300字）、Transcript路径 |
+| 权限请求 | 项目目录、时间、会话ID、通知标题、通知内容、通知类型 |
+| 工具失败 | 项目目录、时间、会话ID、工具名、输入参数、错误信息 |
+| 危险拦截 | 项目目录、时间、完整命令、匹配规则、会话ID |
 
 ## 飞书通知方式
 
@@ -58,14 +78,6 @@ npx claude-code-hooks-feishu --remove # 卸载
 - `git reset --hard`
 - `DROP TABLE` / `DROP DATABASE`
 - `mkfs` / `dd if=` / `> /dev/sda`
-
-## Plugin Marketplace
-
-本项目支持 Claude Code Plugin marketplace 分发：
-
-```bash
-/plugin marketplace add Tigerdwgth/claude-code-hooks-feishu
-```
 
 ## License
 

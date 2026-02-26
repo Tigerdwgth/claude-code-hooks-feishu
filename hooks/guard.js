@@ -18,10 +18,15 @@ async function main() {
   for (const pattern of patterns) {
     if (command.includes(pattern)) {
       // 发飞书告警
+      const fields = [
+        { label: '命令', value: command },
+        { label: '匹配规则', value: pattern }
+      ];
+      if (data.session_id) fields.push({ label: '会话ID', value: data.session_id });
       await send({
         type: 'danger_blocked',
         cwd: data.cwd || process.cwd(),
-        detail: `命令: \`${command}\`\n匹配规则: \`${pattern}\``
+        fields
       });
       // exit 2 = 阻止执行，stderr 作为反馈
       process.stderr.write(
