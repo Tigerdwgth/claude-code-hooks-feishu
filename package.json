@@ -1,6 +1,6 @@
 {
   "name": "claude-code-hooks-feishu",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "飞书双向交互 + 通知 + 危险命令拦截 for Claude Code",
   "bin": {
     "claude-code-hooks-feishu": "bin/cli.js"
