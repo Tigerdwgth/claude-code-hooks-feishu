@@ -53,6 +53,9 @@ async function main() {
   const h4 = await ask('  Commit 前代码审查 [Y/n]: ');
   config.hooks.codeReview = h4.trim().toLowerCase() !== 'n';
 
+  const h5 = await ask('  飞书双向交互 (Stop后继续对话/权限审批) [Y/n]: ');
+  config.hooks.interactive = h5.trim().toLowerCase() !== 'n';
+
   if (config.hooks.formatPython) {
     const fmt = await ask('  Python 格式化工具 (black/autopep8) [black]: ');
     if (fmt.trim()) config.pythonFormatter = fmt.trim();
@@ -70,7 +73,7 @@ async function main() {
 
   const srcRoot = path.resolve(__dirname, '..');
   // 复制 hooks
-  for (const f of ['notify.js', 'guard.js', 'format-python.sh', 'code-review.sh']) {
+  for (const f of ['notify.js', 'guard.js', 'interactive.js', 'format-python.sh', 'code-review.sh']) {
     const src = path.join(srcRoot, 'hooks', f);
     const dst = path.join(hooksDir, f);
     if (fs.existsSync(src)) {
@@ -79,7 +82,7 @@ async function main() {
     }
   }
   // 复制 lib
-  for (const f of ['config.js', 'feishu-webhook.js', 'feishu-app.js', 'sender.js']) {
+  for (const f of ['config.js', 'feishu-webhook.js', 'feishu-app.js', 'sender.js', 'ipc.js', 'card-builder.js', 'daemon.js']) {
     const src = path.join(srcRoot, 'lib', f);
     const dst = path.join(libDir, f);
     if (fs.existsSync(src)) fs.copyFileSync(src, dst);
@@ -171,15 +174,32 @@ async function main() {
     }
   }
 
+  if (config.hooks.interactive) {
+    for (const event of ['Stop', 'Notification']) {
+      if (!claudeSettings.hooks[event]) claudeSettings.hooks[event] = [];
+      const existing = claudeSettings.hooks[event].find(h =>
+        h.hooks?.some(hh => hh.command?.includes('interactive.js'))
+      );
+      if (!existing) {
+        claudeSettings.hooks[event].push({
+          hooks: [{ type: 'command', command: nodeCmd('interactive.js') }]
+        });
+      }
+    }
+  }
+
   fs.mkdirSync(path.dirname(claudeSettingsPath), { recursive: true });
   fs.writeFileSync(claudeSettingsPath, JSON.stringify(claudeSettings, null, 2), 'utf-8');
   console.log(`✅ Hooks 已注入 ${claudeSettingsPath}`);
 
   console.log('\n🎉 安装完成! Claude Code 现在会通过飞书通知你。\n');
   console.log('管理命令:');
-  console.log('  npx claude-code-hooks-feishu          # 重新配置');
-  console.log('  npx claude-code-hooks-feishu --test    # 发送测试消息');
-  console.log('  npx claude-code-hooks-feishu --remove  # 卸载\n');
+  console.log('  npx claude-code-hooks-feishu                # 重新配置');
+  console.log('  npx claude-code-hooks-feishu --test         # 发送测试消息');
+  console.log('  npx claude-code-hooks-feishu --remove       # 卸载');
+  console.log('  npx claude-code-hooks-feishu --daemon start # 启动交互守护进程');
+  console.log('  npx claude-code-hooks-feishu --daemon stop  # 停止守护进程');
+  console.log('  npx claude-code-hooks-feishu --daemon status# 查看状态\n');
 
   rl.close();
 }
@@ -205,6 +225,35 @@ if (args.includes('--test')) {
       console.log('未配置任何通知渠道。请先运行 npx claude-code-hooks-feishu 进行配置。');
     }
   })();
+} else if (args.includes('--daemon')) {
+  const { loadConfig } = require('../lib/config');
+  const cfg = loadConfig();
+  const sub = args[args.indexOf('--daemon') + 1] || 'status';
+
+  if (sub === 'start') {
+    if (!cfg.app.enabled || !cfg.app.appId) {
+      console.log('❌ 请先配置飞书应用 (appId/appSecret)');
+      console.log('运行: npx claude-code-hooks-feishu');
+      process.exit(1);
+    }
+    const { startDaemon } = require('../lib/daemon');
+    startDaemon(cfg.app.appId, cfg.app.appSecret).catch(e => {
+      console.error('启动失败:', e.message);
+      process.exit(1);
+    });
+  } else if (sub === 'stop') {
+    const { stopDaemon } = require('../lib/daemon');
+    stopDaemon();
+  } else {
+    const { isRunning, getPidPath, getLogPath } = require('../lib/daemon');
+    const running = isRunning();
+    console.log(`守护进程状态: ${running ? '✅ 运行中' : '❌ 未运行'}`);
+    if (running) {
+      const pid = fs.readFileSync(getPidPath(), 'utf-8').trim();
+      console.log(`PID: ${pid}`);
+    }
+    console.log(`日志: ${getLogPath()}`);
+  }
 } else if (args.includes('--remove')) {
   const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
   if (fs.existsSync(claudeSettingsPath)) {

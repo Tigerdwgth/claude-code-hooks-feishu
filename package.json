@@ -1,7 +1,7 @@
 {
   "name": "claude-code-hooks-feishu",
-  "version": "1.1.0",
-  "description": "飞书通知 + 危险命令拦截 + Python格式化 + Commit审查 for Claude Code",
+  "version": "2.0.0",
+  "description": "飞书双向交互 + 通知 + 危险命令拦截 for Claude Code",
   "bin": {
     "claude-code-hooks-feishu": "bin/cli.js"
   },
@@ -26,5 +26,8 @@
     "hooks/",
     "lib/",
     "marketplace.json"
-  ]
+  ],
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0"
+  }
 }
