@@ -55,7 +55,6 @@ test('handleCardAction writes response for message action with input', () => {
 
 test('handleMessage writes response for text reply', () => {
   const { writeRequest, respPath, reqPath } = require('../lib/ipc');
-  // 清理前面测试遗留的 request 文件，避免 listPendingRequests 返回旧条目干扰排序
   for (const old of ['card-test-001', 'card-test-002']) {
     try { fs.unlinkSync(reqPath(old)); } catch {}
     try { fs.unlinkSync(respPath(old)); } catch {}
@@ -76,4 +75,38 @@ test('handleMessage writes response for text reply', () => {
   const resp = JSON.parse(fs.readFileSync(rp, 'utf-8'));
   assert.strictEqual(resp.action, 'message');
   assert.strictEqual(resp.content, '请继续');
+});
+
+test('handleMessage resolves "允许" keyword to allow action', () => {
+  const { writeRequest, respPath, reqPath } = require('../lib/ipc');
+  try { fs.unlinkSync(reqPath('msg-test-001')); } catch {}
+  try { fs.unlinkSync(respPath('msg-test-001')); } catch {}
+
+  const reqId = 'msg-test-allow';
+  writeRequest(reqId, { requestId: reqId, type: 'danger', timestamp: Date.now() });
+
+  handleMessage({
+    message: { message_type: 'text', content: JSON.stringify({ text: '允许' }) },
+    sender: { sender_id: { open_id: 'ou_test789' } }
+  });
+
+  const resp = JSON.parse(fs.readFileSync(respPath(reqId), 'utf-8'));
+  assert.strictEqual(resp.action, 'allow');
+});
+
+test('handleMessage resolves "拒绝" keyword to deny action', () => {
+  const { writeRequest, respPath, reqPath } = require('../lib/ipc');
+  try { fs.unlinkSync(reqPath('msg-test-allow')); } catch {}
+  try { fs.unlinkSync(respPath('msg-test-allow')); } catch {}
+
+  const reqId = 'msg-test-deny';
+  writeRequest(reqId, { requestId: reqId, type: 'danger', timestamp: Date.now() });
+
+  handleMessage({
+    message: { message_type: 'text', content: JSON.stringify({ text: '拒绝' }) },
+    sender: { sender_id: { open_id: 'ou_test789' } }
+  });
+
+  const resp = JSON.parse(fs.readFileSync(respPath(reqId), 'utf-8'));
+  assert.strictEqual(resp.action, 'deny');
 });
