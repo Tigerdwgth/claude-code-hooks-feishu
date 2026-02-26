@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const { loadConfig } = require('../lib/config');
 const { send } = require('../lib/sender');
 const { buildPermissionCard } = require('../lib/card-builder');
-const { writeRequest, pollResponse } = require('../lib/ipc');
+const { writeRequest, pollResponse, updateRequest } = require('../lib/ipc');
 const { sendAppMessage } = require('../lib/feishu-app');
 const { sendWebhook } = require('../lib/feishu-webhook');
 const { isRunning } = require('../lib/daemon');
@@ -68,11 +68,13 @@ async function main() {
 
   if (config.app.enabled && config.app.appId) {
     try {
-      await sendAppMessage(
+      const sendResult = await sendAppMessage(
         config.app.appId, config.app.appSecret,
         config.app.receiverId, config.app.receiverType,
         cardContent
       );
+      const msgId = sendResult?.data?.message_id;
+      if (msgId) updateRequest(requestId, { messageId: msgId });
     } catch (e) {
       console.error('[guard] App send failed:', e.message);
     }
