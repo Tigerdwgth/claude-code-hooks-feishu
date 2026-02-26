@@ -1,16 +1,22 @@
 {
   "name": "claude-code-hooks-feishu",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "飞书通知 + 危险命令拦截 + Python格式化 + Commit审查 for Claude Code",
   "bin": {
-    "claude-code-hooks-feishu": "./bin/cli.js"
+    "claude-code-hooks-feishu": "bin/cli.js"
   },
-  "keywords": ["claude-code", "feishu", "hooks", "notification", "lark"],
+  "keywords": [
+    "claude-code",
+    "feishu",
+    "hooks",
+    "notification",
+    "lark"
+  ],
   "author": "Tigerdwgth <q2w3er5t6tty7@sina.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Tigerdwgth/claude-code-hooks-feishu.git"
+    "url": "git+https://github.com/Tigerdwgth/claude-code-hooks-feishu.git"
   },
   "engines": {
     "node": ">=18"
