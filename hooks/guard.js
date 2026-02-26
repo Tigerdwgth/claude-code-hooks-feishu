@@ -8,6 +8,47 @@ const { sendAppMessage } = require('../lib/feishu-app');
 const { sendWebhook } = require('../lib/feishu-webhook');
 const { isRunning } = require('../lib/daemon');
 
+const os = require('node:os');
+
+// 受保护的系统/用户关键目录
+const PROTECTED_PATHS = [
+  '/', '/bin', '/boot', '/dev', '/etc', '/lib', '/lib64',
+  '/opt', '/proc', '/root', '/run', '/sbin', '/srv', '/sys',
+  '/usr', '/var', os.homedir()
+];
+
+/**
+ * 判断 rm -rf 是否危险：只有删除系统目录或用户主目录才拦截
+ * 普通的 rm -rf some_dir 放行
+ */
+function isDangerousRm(command) {
+  // 匹配 rm 命令中包含 -r/-rf/-Rf 等递归删除标志
+  if (!/\brm\b/.test(command)) return null;
+  if (!/\s-[a-zA-Z]*r[a-zA-Z]*f?/.test(command) && !/\s-[a-zA-Z]*f[a-zA-Z]*r/.test(command)) return null;
+
+  // 提取 rm 后面的路径参数（跳过 flags）
+  const parts = command.split(/[;&|]/).map(s => s.trim());
+  for (const part of parts) {
+    if (!/\brm\b/.test(part)) continue;
+    const tokens = part.split(/\s+/);
+    for (const token of tokens) {
+      if (token === 'rm' || token.startsWith('-')) continue;
+      // 解析路径
+      const resolved = token.startsWith('/')
+        ? token.replace(/\/+$/, '') || '/'
+        : null;
+      if (!resolved) continue;
+      // 检查是否是受保护路径或其父路径
+      for (const p of PROTECTED_PATHS) {
+        if (resolved === p || p.startsWith(resolved + '/')) {
+          return `rm -rf 目标为受保护路径: ${token}`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
@@ -28,6 +69,12 @@ async function main() {
       break;
     }
   }
+
+  // rm -rf 智能检测：只拦截删除系统/用户主目录
+  if (!matched) {
+    matched = isDangerousRm(command);
+  }
+
   if (!matched) process.exit(0);
 
   // daemon 未运行时，直接拦截并发告警（降级行为）
