@@ -25,7 +25,7 @@ test('handleCardAction writes response for allow action', () => {
   writeRequest(reqId, { requestId: reqId, type: 'permission' });
 
   handleCardAction({
-    action: { value: JSON.stringify({ action: 'allow', requestId: reqId }) },
+    action: { value: { action: 'allow', requestId: reqId } },
     operator: { open_id: 'ou_test123' }
   });
 
@@ -42,7 +42,7 @@ test('handleCardAction writes response for message action with input', () => {
   writeRequest(reqId, { requestId: reqId, type: 'stop' });
 
   handleCardAction({
-    action: { value: JSON.stringify({ action: 'message', requestId: reqId }) },
+    action: { value: { action: 'message', requestId: reqId } },
     form_value: { user_input: '继续优化代码' },
     operator: { open_id: 'ou_test123' }
   });
