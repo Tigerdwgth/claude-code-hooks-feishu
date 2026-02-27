@@ -40,7 +40,13 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         const msg = JSON.parse(e.data);
         console.log('[dashboard] ←', msg.type);
         if (msg.type === 'session_list')    setSessions(msg.sessions || []);
-        if (msg.type === 'active_sessions') setActiveSessions((msg.sessions || []).map(s => ({ ...s, machineId: msg.machineId })));
+        if (msg.type === 'active_sessions') {
+          const serverSessions = (msg.sessions || []).map(s => ({ ...s, machineId: msg.machineId }));
+          setActiveSessions(prev => {
+            const optimistic = prev.filter(s => s._optimistic && !serverSessions.some(ss => ss.sessionId === s.sessionId));
+            return [...serverSessions, ...optimistic];
+          });
+        }
         if (msg.type === 'session_history') setHistorySessions((msg.sessions || []).map(s => ({ ...s, machineId: s.machineId || msg.machineId })));
         if (msg.type === 'session_deleted') setHistorySessions(prev => prev.filter(s => s.sessionId !== msg.sessionId));
       } catch {}
@@ -57,6 +63,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
 
   function openTerminal(machineId, sessionId, command, cwd) {
     setShowFileBrowser(false);
+    const isResume = command?.includes('--resume');
     const exists = openTerminals.some(t => t.sessionId === sessionId);
     if (!exists) {
       setOpenTerminals(prev => [...prev, { machineId, sessionId }]);
@@ -67,6 +74,16 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           command: command || ['claude'],
           cwd: cwd || undefined,
         }));
+      }
+      // 乐观更新：恢复的 session 立即出现在运行中 Tab
+      if (isResume) {
+        setActiveSessions(prev => {
+          if (prev.some(s => s.sessionId === sessionId)) return prev;
+          return [...prev, { sessionId, machineId, cwd, mtime: new Date().toISOString(), _optimistic: true }];
+        });
+        setTimeout(() => {
+          setActiveSessions(prev => prev.filter(s => !(s.sessionId === sessionId && s._optimistic)));
+        }, 10000);
       }
     } else {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
