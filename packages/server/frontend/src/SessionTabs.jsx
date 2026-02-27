@@ -2,8 +2,8 @@ import { useState } from 'react';
 
 const TAB_STYLE = (active) => ({
   flex: 1, padding: '0.4rem 0', fontSize: '0.72rem', textAlign: 'center',
-  cursor: 'pointer', borderBottom: active ? '2px solid #58a6ff' : '2px solid transparent',
-  color: active ? '#58a6ff' : '#6e7681', background: 'none', border: 'none',
+  cursor: 'pointer', color: active ? '#58a6ff' : '#6e7681',
+  background: 'none', border: 'none',
   borderBottom: active ? '2px solid #58a6ff' : '2px solid transparent',
 });
 

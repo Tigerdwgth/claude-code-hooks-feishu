@@ -3,6 +3,7 @@ import TerminalPanel from './TerminalPanel';
 import AddUser from './AddUser';
 import SessionTabs from './SessionTabs';
 import FileBrowser from './FileBrowser';
+import PixelView from './PixelView';
 
 export default function Dashboard({ token, onLogout }) {
   const [sessions, setSessions] = useState([]);
@@ -12,6 +13,7 @@ export default function Dashboard({ token, onLogout }) {
   const [wsReady, setWsReady] = useState(false);
   const [showAddUser, setShowAddUser] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [viewMode, setViewMode] = useState('terminal'); // 'terminal' | 'pixel'
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -94,9 +96,22 @@ export default function Dashboard({ token, onLogout }) {
         />
       </div>
 
-      {/* 右侧终端区域 */}
+      {/* 右侧终端/像素区域 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {active ? (
+        {/* 切换按钮 */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 8px', borderBottom: '1px solid #21262d', flexShrink: 0 }}>
+          {['terminal', 'pixel'].map(mode => (
+            <button key={mode} onClick={() => setViewMode(mode)} style={{
+              background: viewMode === mode ? '#21262d' : 'none',
+              border: '1px solid ' + (viewMode === mode ? '#30363d' : 'transparent'),
+              color: viewMode === mode ? '#e6edf3' : '#6e7681',
+              borderRadius: '4px', cursor: 'pointer', padding: '2px 10px', fontSize: '0.75rem', marginLeft: '4px'
+            }}>{mode === 'terminal' ? '⌨ 终端' : '🎮 像素'}</button>
+          ))}
+        </div>
+        {viewMode === 'pixel' ? (
+          <PixelView ws={wsRef.current} activeSessions={activeSessions} />
+        ) : active ? (
           <TerminalPanel
             key={`${active.machineId}-${active.sessionId}`}
             machineId={active.machineId}

@@ -102,7 +102,12 @@ class RelayServer {
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({ type: 'pty_resize', sessionId: msg.sessionId, cols: msg.cols, rows: msg.rows }));
       }
-    } else if (msg.type === 'scan_history' || msg.type === 'list_dir') {
+    } else if (msg.type === 'scan_history') {
+      // 广播给所有在线机器
+      for (const [, m] of this.machines) {
+        if (m.ws.readyState === 1) m.ws.send(JSON.stringify({ type: 'scan_history' }));
+      }
+    } else if (msg.type === 'list_dir') {
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify(msg));
@@ -135,6 +140,10 @@ class RelayServer {
       const browserId = ++this._browserId;
       this.browsers.set(browserId, { ws, watchingMachine: null, watchingSession: null });
       ws.send(JSON.stringify({ type: 'session_list', sessions: this.getAllSessions() }));
+      // 触发所有在线机器推送历史 session
+      for (const [, m] of this.machines) {
+        if (m.ws.readyState === 1) m.ws.send(JSON.stringify({ type: 'scan_history' }));
+      }
       ws.on('message', (data) => this.handleBrowserMessage(browserId, data.toString()));
       ws.on('close', () => this.browsers.delete(browserId));
     });
