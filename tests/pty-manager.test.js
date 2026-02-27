@@ -25,3 +25,12 @@ test('resize PTY', () => {
   mgr.resize('sess2', 120, 40); // should not throw
   mgr.destroy('sess2');
 });
+
+test('create reuses existing PTY if alive', () => {
+  const mgr = new PtyManager();
+  const p1 = mgr.create('s1', { command: ['echo'], cwd: '/tmp' });
+  const pid1 = p1.pid;
+  const p2 = mgr.create('s1', { command: ['echo'], cwd: '/tmp' });
+  assert.strictEqual(p2.pid, pid1, 'should reuse same PTY process');
+  mgr.destroyAll();
+});
