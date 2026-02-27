@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { buildStopCard, buildPermissionCard, buildStatusUpdateCard } = require('../lib/card-builder');
+const { buildStopCard, buildPermissionCard, buildStatusUpdateCard, buildSessionPickerCard } = require('../lib/card-builder');
 
 test('buildStopCard contains buttons and reply hint', () => {
   const card = buildStopCard({
@@ -64,4 +64,57 @@ test('buildStatusUpdateCard shows action result', () => {
   const text = JSON.stringify(parsed);
   assert.ok(text.includes('继续优化代码'));
   assert.ok(text.includes('葛士嘉'));
+});
+
+test('buildStopCard includes machineId when provided', () => {
+  const card = buildStopCard({
+    requestId: 'req-1',
+    sessionId: 'sess-1',
+    machineId: 'dev-server-01',
+    cwd: '/tmp/project',
+    message: 'done'
+  });
+  const parsed = JSON.parse(card);
+  const text = parsed.elements[0].text.content;
+  assert.ok(text.includes('dev-server-01'));
+  assert.ok(text.includes('sess-1'));
+});
+
+test('buildPermissionCard includes machineId when provided', () => {
+  const card = buildPermissionCard({
+    requestId: 'req-2',
+    sessionId: 'sess-2',
+    machineId: 'prod-server',
+    cwd: '/app',
+    title: 'test',
+    message: 'msg'
+  });
+  const parsed = JSON.parse(card);
+  const text = parsed.elements[0].text.content;
+  assert.ok(text.includes('prod-server'));
+});
+
+test('buildStopCard works without machineId', () => {
+  const card = buildStopCard({
+    requestId: 'req-3',
+    sessionId: 'sess-3',
+    cwd: '/tmp',
+    message: 'ok'
+  });
+  const parsed = JSON.parse(card);
+  assert.ok(parsed.header);
+});
+
+test('buildSessionPickerCard lists sessions with buttons', () => {
+  const sessions = [
+    { machineId: 'machine-1', sessionId: 'sess-abcdef12', cwd: '/project-a', lastActivity: Date.now() - 60000 },
+    { machineId: 'machine-2', sessionId: 'sess-ghijkl34', cwd: '/project-b', lastActivity: Date.now() - 300000 }
+  ];
+  const card = buildSessionPickerCard({ sessions, originalText: '帮我写代码' });
+  const parsed = JSON.parse(card);
+  assert.ok(parsed.header.title.content.includes('选择'));
+  const actions = parsed.elements.filter(e => e.tag === 'action');
+  assert.ok(actions.length > 0);
+  assert.strictEqual(actions[0].actions.length, 2);
+  assert.strictEqual(actions[0].actions[0].value.action, 'route');
 });

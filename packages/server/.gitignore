@@ -1,4 +1,3 @@
 node_modules/
 users.db
 *.db
-frontend/dist/

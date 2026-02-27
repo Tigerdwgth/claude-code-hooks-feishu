@@ -7,6 +7,8 @@ const { writeRequest, pollResponse, updateRequest } = require('../lib/ipc');
 const { sendAppMessage } = require('../lib/feishu-app');
 const { sendWebhook } = require('../lib/feishu-webhook');
 const { isRunning } = require('../lib/daemon');
+const { getMachineId } = require('../lib/config');
+const { registerSession } = require('../lib/session-registry');
 
 const os = require('node:os');
 
@@ -94,10 +96,15 @@ async function main() {
   const requestId = crypto.randomUUID();
   const cwd = data.cwd || process.cwd();
   const sessionId = data.session_id || '';
+  const machineId = getMachineId();
+
+  // 注册/更新 session
+  registerSession({ machineId, sessionId, cwd, pid: process.pid });
 
   const cardContent = buildPermissionCard({
     requestId,
     sessionId,
+    machineId,
     cwd,
     title: '⚠️ 检测到危险命令',
     message: `**命令**: \`${command}\`\n**匹配规则**: \`${matched}\``,
@@ -107,6 +114,7 @@ async function main() {
   writeRequest(requestId, {
     requestId,
     type: 'danger',
+    machineId,
     sessionId,
     hookEvent: 'PreToolUse',
     command,

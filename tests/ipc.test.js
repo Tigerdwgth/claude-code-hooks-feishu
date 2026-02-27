@@ -7,7 +7,7 @@ const os = require('node:os');
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ipc-test-'));
 process.env.CLAUDE_HOOKS_FEISHU_IPC_DIR = tmpDir;
 
-const { writeRequest, writeResponse, pollResponse, IPC_DIR } = require('../lib/ipc');
+const { writeRequest, writeResponse, pollResponse, getIpcDir, IPC_DIR } = require('../lib/ipc');
 
 test('writeRequest creates request file with correct content', () => {
   const reqId = 'test-req-001';
@@ -48,4 +48,9 @@ test('pollResponse cleans up files after reading', async () => {
   writeResponse(reqId, { requestId: reqId, action: 'allow' });
   await pollResponse(reqId, { timeoutMs: 1000, intervalMs: 100 });
   assert.ok(!fs.existsSync(reqFilePath));
+});
+
+test('getIpcDir returns env var when set', () => {
+  const dir = getIpcDir();
+  assert.strictEqual(dir, tmpDir);
 });

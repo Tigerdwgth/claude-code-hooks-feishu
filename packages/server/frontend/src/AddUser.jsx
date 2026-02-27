@@ -1,11 +1,15 @@
 import { useState } from 'react';
+import { useTheme, makeInputBase } from './theme';
 
 export default function AddUser({ token, onClose }) {
+  const T = useTheme();
+  const inputBase = makeInputBase(T);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [focused, setFocused]   = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -15,7 +19,7 @@ export default function AddUser({ token, onClose }) {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -32,45 +36,127 @@ export default function AddUser({ token, onClose }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:100 }}>
-      <div style={{ background:'#161b22', border:'1px solid #30363d', borderRadius:'8px', padding:'1.5rem', minWidth:'300px' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
-          <span style={{ color:'#e6edf3', fontWeight:'bold' }}>添加用户</span>
-          <span onClick={onClose} style={{ color:'#8b949e', cursor:'pointer', fontSize:'1.2rem', lineHeight:1 }}>×</span>
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 100, fontFamily: T.fontSans,
+        animation: 'fadeIn 0.15s ease',
+      }}
+    >
+      <style>{`
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .modal-input:focus { border-color: ${T.borderAccent} !important; box-shadow: 0 0 0 3px ${T.accentDim}; }
+        .modal-submit:hover:not(:disabled) { background: ${T.accentHover} !important; }
+        .modal-cancel:hover { background: ${T.bgHover} !important; color: ${T.textPrimary} !important; }
+      `}</style>
+
+      <div style={{
+        background: T.bgCard,
+        border: `1px solid ${T.border}`,
+        borderRadius: T.radiusLg,
+        padding: '1.75rem',
+        width: '100%', maxWidth: '340px',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+        animation: 'slideUp 0.2s ease',
+      }}>
+        {/* 标题 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ color: T.textPrimary, fontWeight: 600, fontSize: '0.95rem' }}>添加用户</div>
+            <div style={{ color: T.textMuted, fontSize: '0.75rem', marginTop: '2px' }}>创建新的登录账号</div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: T.bgHover, border: `1px solid ${T.border}`,
+              color: T.textMuted, borderRadius: '6px',
+              cursor: 'pointer', width: '28px', height: '28px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.85rem',
+            }}
+          >✕</button>
         </div>
-        {error && <p style={{ color:'#f85149', fontSize:'0.85rem', margin:'0 0 0.75rem' }}>{error}</p>}
-        {success && <p style={{ color:'#3fb950', fontSize:'0.85rem', margin:'0 0 0.75rem' }}>{success}</p>}
+
+        {/* 消息 */}
+        {error && (
+          <div style={{
+            background: T.dangerDim, border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: T.radiusSm, padding: '0.5rem 0.75rem',
+            color: '#fca5a5', fontSize: '0.82rem', marginBottom: '1rem',
+          }}>{error}</div>
+        )}
+        {success && (
+          <div style={{
+            background: T.successDim, border: '1px solid rgba(16,185,129,0.25)',
+            borderRadius: T.radiusSm, padding: '0.5rem 0.75rem',
+            color: '#6ee7b7', fontSize: '0.82rem', marginBottom: '1rem',
+          }}>{success}</div>
+        )}
+
         <form onSubmit={handleSubmit}>
-          <input
-            placeholder="用户名"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            autoFocus
-            style={inputStyle}
-          />
-          <input
-            type="password"
-            placeholder="密码（至少6个字符）"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={inputStyle}
-          />
-          <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.25rem' }}>
-            <button type="submit" disabled={loading} style={{ flex:1, padding:'0.4rem', background:'#238636', color:'#e6edf3', border:'1px solid #2ea043', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem' }}>
-              {loading ? '创建中…' : '创建'}
+          <div style={{ marginBottom: '0.75rem' }}>
+            <label style={{ display: 'block', color: T.textSecondary, fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 500 }}>用户名</label>
+            <input
+              className="modal-input"
+              placeholder="输入用户名"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              autoFocus
+              style={{ ...inputBase, border: `1px solid ${focused === 'u' ? T.borderAccent : T.border}` }}
+              onFocus={() => setFocused('u')}
+              onBlur={() => setFocused('')}
+            />
+          </div>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label style={{ display: 'block', color: T.textSecondary, fontSize: '0.75rem', marginBottom: '0.3rem', fontWeight: 500 }}>密码</label>
+            <input
+              className="modal-input"
+              type="password"
+              placeholder="至少 6 个字符"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              style={{ ...inputBase, border: `1px solid ${focused === 'p' ? T.borderAccent : T.border}` }}
+              onFocus={() => setFocused('p')}
+              onBlur={() => setFocused('')}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              className="modal-submit"
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: 1, padding: '0.55rem',
+                background: loading ? T.bgHover : T.accent,
+                color: '#fff', border: 'none',
+                borderRadius: T.radiusSm, cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '0.85rem', fontWeight: 600, fontFamily: T.fontSans,
+                opacity: loading ? 0.7 : 1, transition: 'background 0.15s',
+              }}
+            >
+              {loading ? '创建中…' : '创建用户'}
             </button>
-            <button type="button" onClick={onClose} style={{ flex:1, padding:'0.4rem', background:'none', color:'#8b949e', border:'1px solid #30363d', borderRadius:'6px', cursor:'pointer', fontSize:'0.85rem' }}>
-              关闭
-            </button>
+            <button
+              className="modal-cancel"
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1, padding: '0.55rem',
+                background: 'none', color: T.textMuted,
+                border: `1px solid ${T.border}`,
+                borderRadius: T.radiusSm, cursor: 'pointer',
+                fontSize: '0.85rem', fontFamily: T.fontSans,
+                transition: 'all 0.15s',
+              }}
+            >取消</button>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-const inputStyle = {
-  display:'block', width:'100%', marginBottom:'0.75rem', padding:'0.4rem 0.75rem',
-  borderRadius:'6px', border:'1px solid #30363d', background:'#0d1117',
-  color:'#e6edf3', boxSizing:'border-box', outline:'none', fontSize:'0.85rem'
-};

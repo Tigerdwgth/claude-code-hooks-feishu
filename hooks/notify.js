@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 const { resolveEventType, send } = require('../lib/sender');
+const { getMachineId } = require('../lib/config');
+const { registerSession } = require('../lib/session-registry');
 
 function extractToolInput(data) {
   const input = data.tool_input || {};
@@ -46,6 +48,9 @@ async function main() {
   if (hookEvent === 'PostToolUseFailure') return;
 
   const cwd = data.cwd || process.cwd();
+  const machineId = getMachineId();
+  const sessionId = data.session_id || '';
+  registerSession({ machineId, sessionId, cwd, pid: process.pid });
   const type = resolveEventType(hookEvent, {});
   const fields = buildFields(hookEvent, data);
 

@@ -14,6 +14,7 @@ class RelayServer {
   }
 
   registerMachine(machineId, ws) {
+    console.log(`[relay] machine registered: ${machineId}`);
     this.machines.set(machineId, { ws, sessions: [] });
   }
 
@@ -47,9 +48,29 @@ class RelayServer {
     }
   }
 
+  _addBrowser(ws) {
+    const browserId = ++this._browserId;
+    this.browsers.set(browserId, { ws, watchingMachine: null, watchingSession: null });
+    const allSessions = this.getAllSessions();
+    console.log(`[relay] browser #${browserId} connected, ${allSessions.length} sessions, ${this.machines.size} machines`);
+    ws.send(JSON.stringify({ type: 'session_list', sessions: allSessions }));
+    // 触发所有在线机器立即推送 active_sessions 和 history
+    for (const [, m] of this.machines) {
+      if (m.ws.readyState === 1) {
+        m.ws.send(JSON.stringify({ type: 'scan_active' }));
+        m.ws.send(JSON.stringify({ type: 'scan_history' }));
+      }
+    }
+    return browserId;
+  }
+
   handleMachineMessage(machineId, raw) {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    const detail = msg.type === 'session_list' ? `(${(msg.sessions||[]).length} sessions)` :
+      msg.type === 'active_sessions' ? `(${(msg.sessions||[]).length} active)` :
+      msg.type === 'session_history' ? `(${(msg.sessions||[]).length} history)` : '';
+    console.log(`[relay] machine ${machineId} → ${msg.type} ${detail}`);
 
     if (msg.type === 'session_list') {
       this.updateSessions(machineId, msg.sessions || []);
@@ -86,7 +107,9 @@ class RelayServer {
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({
           type: 'pty_open', sessionId: msg.sessionId,
-          cols: msg.cols || 220, rows: msg.rows || 50
+          cols: msg.cols || 220, rows: msg.rows || 50,
+          command: msg.command,
+          cwd: msg.cwd
         }));
       }
       browser.ws.send(JSON.stringify({ type: 'session_list', sessions: this.getAllSessions() }));
@@ -116,7 +139,19 @@ class RelayServer {
   }
 
   attachToHttpServer(server) {
-    const wss = new WebSocketServer({ server, path: '/ws' });
+    // 不限制 path，让代理转发的各种路径都能连接（如 /proxy/3000/ws）
+    const wss = new WebSocketServer({ noServer: true });
+    server.on('upgrade', (req, socket, head) => {
+      // 只要路径以 /ws 结尾就接受
+      const pathname = new URL(req.url, 'http://localhost').pathname;
+      if (pathname.endsWith('/ws') || pathname === '/ws') {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      } else {
+        socket.destroy();
+      }
+    });
     wss.on('connection', (ws, req) => {
       const url = new URL(req.url, 'http://localhost');
       const token = url.searchParams.get('token');
@@ -137,13 +172,7 @@ class RelayServer {
       // 浏览器连接（JWT）
       const payload = verifyToken(token);
       if (!payload) { ws.close(4001, 'Unauthorized'); return; }
-      const browserId = ++this._browserId;
-      this.browsers.set(browserId, { ws, watchingMachine: null, watchingSession: null });
-      ws.send(JSON.stringify({ type: 'session_list', sessions: this.getAllSessions() }));
-      // 触发所有在线机器推送历史 session
-      for (const [, m] of this.machines) {
-        if (m.ws.readyState === 1) m.ws.send(JSON.stringify({ type: 'scan_history' }));
-      }
+      const browserId = this._addBrowser(ws);
       ws.on('message', (data) => this.handleBrowserMessage(browserId, data.toString()));
       ws.on('close', () => this.browsers.delete(browserId));
     });

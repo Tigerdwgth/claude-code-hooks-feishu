@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import type { EditorState } from '../office/editor/editorState.js'
-import { EditTool } from '../office/types.js'
+import type { EditorState } from '../pixel-office/editor/editorState.js'
+import { EditTool } from '../pixel-office/types.js'
 
 export function useEditorKeyboard(
   isEditMode: boolean,

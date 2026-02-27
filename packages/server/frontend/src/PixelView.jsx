@@ -1,32 +1,34 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { OfficeState } from './pixel-office/engine/officeState.js';
-import { OfficeCanvas } from './pixel-office/components/OfficeCanvas.js';
-import { useExtensionMessages } from './pixel-hooks/useExtensionMessages.js';
-import { playDoneSound } from './pixel-notificationSound.js';
+import { useEffect, useRef } from 'react';
+import PixelApp from './PixelApp';
 
 // session ID (string) → numeric agent ID
 const sessionToId = new Map();
 let nextAgentId = 1;
-
 function getAgentId(sessionId) {
   if (!sessionToId.has(sessionId)) sessionToId.set(sessionId, nextAgentId++);
   return sessionToId.get(sessionId);
 }
 
-const officeStateRef = { current: null };
-function getOfficeState() {
-  if (!officeStateRef.current) officeStateRef.current = new OfficeState();
-  return officeStateRef.current;
-}
-
 export default function PixelView({ ws, activeSessions }) {
-  const dispatchRef = useRef(null);
+  const initializedRef = useRef(false);
 
-  // useExtensionMessages 监听 window 'message' 事件
-  // 我们通过 dispatchRef 手动 dispatch 消息
-  const { agents, agentTools, agentStatuses } = useExtensionMessages(getOfficeState);
+  // 把 activeSessions 转成 pixel-agents 期望的 window message
+  useEffect(() => {
+    // 即使 activeSessions 为空也要初始化 layout
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'layoutLoaded', layout: null }
+      }));
+    }
+    const agentIds = activeSessions.map(s => getAgentId(s.sessionId));
+    // 发送 existingAgents
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'existingAgents', agents: agentIds, agentMeta: {} }
+    }));
+  }, [activeSessions.map(s => s.sessionId).join(',')]);
 
-  // 把 WebSocket 消息转换成 pixel-agents 期望的 window message 格式
+  // WebSocket agent_status → pixel-agents window messages
   useEffect(() => {
     if (!ws) return;
     function onMessage(e) {
@@ -34,13 +36,13 @@ export default function PixelView({ ws, activeSessions }) {
         const msg = JSON.parse(e.data);
         if (msg.type === 'agent_status') {
           const id = getAgentId(msg.sessionId);
-          // 派发为 window message，useExtensionMessages 会处理
-          window.dispatchEvent(new MessageEvent('message', {
-            data: { type: 'agentStatus', id, status: msg.status }
-          }));
-          if (msg.toolStatus) {
+          if (msg.status === 'active' && msg.toolStatus) {
             window.dispatchEvent(new MessageEvent('message', {
-              data: { type: 'agentToolStart', id, toolId: msg.toolId || msg.sessionId, status: msg.toolStatus }
+              data: { type: 'agentToolStart', id, toolId: msg.toolId || `t-${id}`, status: msg.toolStatus }
+            }));
+          } else {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: { type: 'agentStatus', id, status: msg.status || 'active' }
             }));
           }
         }
@@ -50,42 +52,12 @@ export default function PixelView({ ws, activeSessions }) {
     return () => ws.removeEventListener('message', onMessage);
   }, [ws]);
 
-  // 同步 activeSessions → pixel agents
-  useEffect(() => {
-    for (const s of activeSessions) {
-      const id = getAgentId(s.sessionId);
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: 'existingAgents', agents: [id], agentMeta: {} }
-      }));
-    }
-    // 发送默认 layout
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'layoutLoaded', layout: null }
-    }));
-  }, [activeSessions.map(s => s.sessionId).join(',')]);
-
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0d1117' }}>
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <OfficeCanvas
-          getOfficeState={getOfficeState}
-          agents={agents}
-          agentTools={agentTools}
-          agentStatuses={agentStatuses}
-          subagentCharacters={[]}
-          selectedAgent={null}
-          onAgentClick={() => {}}
-          isEditMode={false}
-          editorState={null}
-          onEditorAction={null}
-          zoom={1}
-        />
-      </div>
-      <div style={{ fontSize: '0.65rem', color: '#444', textAlign: 'center', padding: '4px', borderTop: '1px solid #21262d' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+      <PixelApp />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: '0.6rem', color: '#333', textAlign: 'center', padding: '2px', background: 'rgba(0,0,0,0.5)' }}>
         Pixel art inspired by{' '}
-        <a href="https://github.com/georgetrad/pixel-agents" target="_blank" rel="noreferrer" style={{ color: '#58a6ff' }}>
-          Pixel Agents
-        </a>
+        <a href="https://github.com/georgetrad/pixel-agents" target="_blank" rel="noreferrer" style={{ color: '#58a6ff' }}>Pixel Agents</a>
         {' '}by Pablo De Lucca — MIT License
       </div>
     </div>

@@ -7,6 +7,9 @@ const { sendAppMessage } = require('../lib/feishu-app');
 const { sendWebhook } = require('../lib/feishu-webhook');
 const { resolveEventType } = require('../lib/sender');
 const { isRunning } = require('../lib/daemon');
+const { getMachineId } = require('../lib/config');
+const { registerSession } = require('../lib/session-registry');
+const { dequeue } = require('../lib/message-queue');
 
 function generateRequestId() {
   return crypto.randomUUID();
@@ -17,28 +20,25 @@ function buildInteractivePayload(data) {
   const requestId = generateRequestId();
   const sessionId = data.session_id || '';
   const cwd = data.cwd || process.cwd();
+  const machineId = getMachineId();
 
   let cardContent;
   if (hookEvent === 'Stop') {
     cardContent = buildStopCard({
-      requestId,
-      sessionId,
-      cwd,
+      requestId, sessionId, machineId, cwd,
       message: data.last_assistant_message || '',
       transcriptPath: data.transcript_path
     });
   } else {
     cardContent = buildPermissionCard({
-      requestId,
-      sessionId,
-      cwd,
+      requestId, sessionId, machineId, cwd,
       title: data.title || '',
       message: data.message || '',
       notificationType: data.notification_type || ''
     });
   }
 
-  return { cardContent, requestId, hookEvent, sessionId, cwd };
+  return { cardContent, requestId, hookEvent, sessionId, machineId, cwd };
 }
 
 function processResponse(hookEvent, response) {
@@ -72,6 +72,13 @@ async function main() {
 
   const hookEvent = data.hook_event_name || 'Stop';
 
+  const machineId = getMachineId();
+  const sessionId = data.session_id || '';
+  const cwd = data.cwd || process.cwd();
+
+  // 注册/更新 session
+  registerSession({ machineId, sessionId, cwd, pid: process.pid });
+
   if (data.stop_hook_active) {
     process.exit(0);
     return;
@@ -89,11 +96,25 @@ async function main() {
     return;
   }
 
-  const { cardContent, requestId, cwd } = buildInteractivePayload(data);
+  // 检查队列中是否有属于本 session 的消息
+  if (hookEvent === 'Stop') {
+    const queued = dequeue(machineId, sessionId);
+    if (queued) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: `用户通过飞书下达新指令: ${queued.content}`
+      }));
+      process.exit(0);
+      return;
+    }
+  }
+
+  const { cardContent, requestId } = buildInteractivePayload(data);
 
   writeRequest(requestId, {
     requestId,
     type: hookEvent === 'Stop' ? 'stop' : 'permission',
+    machineId,
     sessionId: data.session_id || '',
     hookEvent
   });

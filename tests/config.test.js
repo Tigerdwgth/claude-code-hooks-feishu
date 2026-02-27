@@ -8,7 +8,7 @@ const os = require('node:os');
 const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hooks-test-'));
 process.env.CLAUDE_HOOKS_FEISHU_HOME = tmpHome;
 
-const { loadConfig, saveConfig, getConfigPath, getHooksDir } = require('../lib/config');
+const { loadConfig, saveConfig, getConfigPath, getHooksDir, defaultConfig, getMachineId } = require('../lib/config');
 
 test('getConfigPath returns correct path', () => {
   const p = getConfigPath();
@@ -36,4 +36,24 @@ test('saveConfig and loadConfig roundtrip', () => {
   const loaded = loadConfig();
   assert.strictEqual(loaded.webhook.enabled, true);
   assert.strictEqual(loaded.webhook.url, 'https://example.com/hook');
+});
+
+test('defaultConfig includes ipcDir and machineId', () => {
+  const cfg = defaultConfig();
+  assert.strictEqual(typeof cfg.ipcDir, 'string');
+  assert.strictEqual(cfg.ipcDir, '');
+  assert.strictEqual(typeof cfg.machineId, 'string');
+  assert.strictEqual(cfg.machineId, '');
+});
+
+test('getMachineId returns hostname when machineId is empty', () => {
+  const id = getMachineId();
+  assert.strictEqual(id, os.hostname());
+});
+
+test('getMachineId returns env var when set', () => {
+  process.env.CLAUDE_HOOKS_MACHINE_ID = 'test-machine-42';
+  const id = getMachineId();
+  assert.strictEqual(id, 'test-machine-42');
+  delete process.env.CLAUDE_HOOKS_MACHINE_ID;
 });
