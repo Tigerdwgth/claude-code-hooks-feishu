@@ -51,7 +51,7 @@ export default function Login({ onLogin, onRegister, isDark, onToggleTheme }) {
       fontFamily: T.fontSans,
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
         .login-input:focus { border-color: ${T.borderAccent} !important; box-shadow: 0 0 0 3px ${T.accentDim}; }
         .login-btn:hover:not(:disabled) { background: ${T.accentHover} !important; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99,102,241,0.35); }
         .login-btn { transition: all 0.15s ease; }

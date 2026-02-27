@@ -18,7 +18,7 @@ export default function TerminalPanel({ machineId, sessionId, ws }) {
       },
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: '"Cascadia Code", "Fira Code", monospace'
+      fontFamily: '"JetBrains Mono", monospace'
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);

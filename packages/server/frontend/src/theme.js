@@ -14,8 +14,8 @@ const BASE = {
   radiusMd:     '8px',
   radiusLg:     '12px',
   radiusPill:   '9999px',
-  fontSans:     '"DM Sans", system-ui, sans-serif',
-  fontMono:     '"Geist Mono", "JetBrains Mono", monospace',
+  fontSans:     '"Plus Jakarta Sans", system-ui, sans-serif',
+  fontMono:     '"JetBrains Mono", monospace',
 };
 
 export const DARK = {
