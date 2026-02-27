@@ -5,9 +5,11 @@ import SessionTabs from './SessionTabs';
 import FileBrowser from './FileBrowser';
 import PixelView from './PixelView';
 import { useTheme } from './theme';
+import useResizable from './useResizable';
 
 export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const T = useTheme();
+  const sidebar = useResizable({ min: 160, max: 400, defaultWidth: 240 });
   const [sessions, setSessions]             = useState([]);
   const [activeSessions, setActiveSessions] = useState([]);
   const [historySessions, setHistorySessions] = useState([]);
@@ -110,12 +112,27 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
       }}>
         {/* ── 左侧面板 ── */}
         <div style={{
-          width: '240px', flexShrink: 0,
+          width: `${sidebar.width}px`, flexShrink: 0,
           background: T.bgPanel,
           borderRight: `1px solid ${T.border}`,
           display: 'flex', flexDirection: 'column',
+          transition: sidebar.dragging ? 'none' : 'width 0.2s ease',
+          overflow: 'hidden', position: 'relative',
           animation: 'slideIn 0.3s ease',
         }}>
+          {/* 折叠按钮 */}
+          <button
+            onClick={sidebar.toggle}
+            style={{
+              position: 'absolute', top: '8px', right: '6px', zIndex: 2,
+              background: 'none', border: 'none', color: T.textMuted,
+              cursor: 'pointer', fontSize: '0.8rem', padding: '2px 4px',
+              borderRadius: T.radiusSm, transition: 'color 0.15s',
+            }}
+            title={sidebar.collapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {sidebar.collapsed ? '›' : '‹'}
+          </button>
           {/* 顶部 Logo + 状态 */}
           <div style={{
             padding: '0.875rem 1rem',
@@ -128,10 +145,11 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.75rem', flexShrink: 0,
               }}>⌨</div>
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', letterSpacing: '-0.01em' }}>Claude Code</span>
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', letterSpacing: '-0.01em', display: sidebar.collapsed ? 'none' : 'inline' }}>Claude Code</span>
             </div>
 
             {/* 连接状态 badge */}
+            {!sidebar.collapsed && (
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: '5px',
               padding: '3px 8px', borderRadius: T.radiusPill,
@@ -148,9 +166,11 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
               }} />
               {wsReady ? (machineId || '已连接') : '连接中…'}
             </div>
+            )}
           </div>
 
           {/* 工具栏 */}
+          {!sidebar.collapsed && (
           <div style={{
             padding: '0.5rem 0.75rem',
             borderBottom: `1px solid ${T.border}`,
@@ -193,9 +213,10 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                 transition: 'all 0.15s',
               }}>⏻</button>
           </div>
+          )}
 
           {/* 文件浏览器 */}
-          {showFileBrowser && (
+          {showFileBrowser && !sidebar.collapsed && (
             <FileBrowser
               ws={wsRef.current}
               machineId={sessions[0]?.machineId || 'local'}
@@ -206,12 +227,32 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           )}
 
           {/* Session Tabs */}
-          <SessionTabs
-            sessions={sessions}
-            activeSessions={activeSessions}
-            historySessions={historySessions}
-            active={active}
-            onOpen={openTerminal}
+          {!sidebar.collapsed ? (
+            <SessionTabs
+              sessions={sessions}
+              activeSessions={activeSessions}
+              historySessions={historySessions}
+              active={active}
+              onOpen={openTerminal}
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '8px 0' }}>
+              <button className="sidebar-btn" onClick={() => sidebar.toggle()} title="活跃" style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: '1rem', padding: '6px' }}>📡</button>
+              <button className="sidebar-btn" onClick={() => sidebar.toggle()} title="运行中" style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: '1rem', padding: '6px' }}>⚡</button>
+              <button className="sidebar-btn" onClick={() => sidebar.toggle()} title="历史" style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: '1rem', padding: '6px' }}>📁</button>
+            </div>
+          )}
+
+          {/* 拖拽手柄 */}
+          <div
+            onMouseDown={sidebar.onMouseDown}
+            onDoubleClick={sidebar.onDoubleClick}
+            style={{
+              position: 'absolute', right: 0, top: 0, bottom: 0,
+              width: '4px', cursor: 'col-resize',
+              background: sidebar.dragging ? T.accent : 'transparent',
+              transition: 'background 0.15s',
+            }}
           />
         </div>
 
