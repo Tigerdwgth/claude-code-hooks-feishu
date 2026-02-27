@@ -17,6 +17,8 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewMode, setViewMode]             = useState('terminal');
   const [openTerminals, setOpenTerminals]   = useState([]); // [{machineId, sessionId}]
+  const [splitTerminals, setSplitTerminals] = useState([]); // 并列显示的 sessionId 列表
+  const [splitMode, setSplitMode]           = useState(false);
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -51,7 +53,6 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   }, [token]);
 
   function openTerminal(machineId, sessionId, command, cwd) {
-    setActive({ machineId, sessionId });
     setShowFileBrowser(false);
     const exists = openTerminals.some(t => t.sessionId === sessionId);
     if (!exists) {
@@ -65,13 +66,18 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         }));
       }
     } else {
-      // 切回已有终端：发 pty_attach
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'pty_attach', machineId, sessionId,
         }));
       }
     }
+    if (splitMode) {
+      setSplitTerminals(prev =>
+        prev.includes(sessionId) ? prev.filter(id => id !== sessionId) : [...prev, sessionId]
+      );
+    }
+    setActive({ machineId, sessionId });
   }
 
   function launchInDir(cwd) {
@@ -256,6 +262,30 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                 {mode === 'terminal' ? '⌨ 终端' : '🎮 像素'}
               </button>
             ))}
+            <button
+              className="view-pill"
+              onClick={() => {
+                if (!splitMode) {
+                  setSplitTerminals(active ? [active.sessionId] : []);
+                  setSplitMode(true);
+                } else {
+                  setSplitMode(false);
+                  setSplitTerminals([]);
+                }
+              }}
+              style={{
+                background: splitMode ? T.accentDim : 'none',
+                border: `1px solid ${splitMode ? T.borderAccent : 'transparent'}`,
+                color: splitMode ? T.accent : T.textMuted,
+                borderRadius: T.radiusPill,
+                cursor: 'pointer', padding: '3px 12px',
+                fontSize: '0.72rem', fontWeight: 500,
+                fontFamily: T.fontSans,
+                transition: 'all 0.15s',
+              }}
+            >
+              {splitMode ? '⊡ 单窗口' : '⊞ 并列'}
+            </button>
           </div>
 
           {/* 内容区 */}
@@ -269,7 +299,12 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                   machineId={t.machineId}
                   sessionId={t.sessionId}
                   ws={wsRef.current}
-                  visible={active?.sessionId === t.sessionId}
+                  visible={splitMode
+                    ? splitTerminals.includes(t.sessionId)
+                    : active?.sessionId === t.sessionId}
+                  style={splitMode && splitTerminals.includes(t.sessionId)
+                    ? { flex: 1, borderRight: `1px solid ${T.border}` }
+                    : {}}
                 />
               ))}
               {!active && (
