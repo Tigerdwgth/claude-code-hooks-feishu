@@ -16,6 +16,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [showAddUser, setShowAddUser]       = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewMode, setViewMode]             = useState('terminal');
+  const [openTerminals, setOpenTerminals]   = useState([]); // [{machineId, sessionId}]
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -52,13 +53,24 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   function openTerminal(machineId, sessionId, command, cwd) {
     setActive({ machineId, sessionId });
     setShowFileBrowser(false);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'open_terminal', machineId, sessionId,
-        cols: 220, rows: 50,
-        command: command || ['claude'],
-        cwd: cwd || undefined,
-      }));
+    const exists = openTerminals.some(t => t.sessionId === sessionId);
+    if (!exists) {
+      setOpenTerminals(prev => [...prev, { machineId, sessionId }]);
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'open_terminal', machineId, sessionId,
+          cols: 220, rows: 50,
+          command: command || ['claude'],
+          cwd: cwd || undefined,
+        }));
+      }
+    } else {
+      // 切回已有终端：发 pty_attach
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'pty_attach', machineId, sessionId,
+        }));
+      }
     }
   }
 
@@ -249,31 +261,37 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           {/* 内容区 */}
           {viewMode === 'pixel' ? (
             <PixelView ws={wsRef.current} activeSessions={activeSessions} />
-          ) : active ? (
-            <TerminalPanel
-              key={`${active.machineId}-${active.sessionId}`}
-              machineId={active.machineId}
-              sessionId={active.sessionId}
-              ws={wsRef.current}
-            />
           ) : (
-            <div style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexDirection: 'column', gap: '0.75rem',
-              color: T.textMuted,
-            }}>
-              <div style={{
-                width: '56px', height: '56px', borderRadius: '14px',
-                background: T.bgCard, border: `1px solid ${T.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.5rem', marginBottom: '0.25rem',
-              }}>⌨</div>
-              <div style={{ fontSize: '0.9rem', color: T.textSecondary, fontWeight: 500 }}>
-                选择 Session 或新建终端
-              </div>
-              <div style={{ fontSize: '0.78rem', color: T.textMuted }}>
-                从左侧面板选择，或点击 ＋ 按钮
-              </div>
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              {openTerminals.map(t => (
+                <TerminalPanel
+                  key={t.sessionId}
+                  machineId={t.machineId}
+                  sessionId={t.sessionId}
+                  ws={wsRef.current}
+                  visible={active?.sessionId === t.sessionId}
+                />
+              ))}
+              {!active && (
+                <div style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexDirection: 'column', gap: '0.75rem',
+                  color: T.textMuted,
+                }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '14px',
+                    background: T.bgCard, border: `1px solid ${T.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.5rem', marginBottom: '0.25rem',
+                  }}>⌨</div>
+                  <div style={{ fontSize: '0.9rem', color: T.textSecondary, fontWeight: 500 }}>
+                    选择 Session 或新建终端
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: T.textMuted }}>
+                    从左侧面板选择，或点击 ＋ 按钮
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
