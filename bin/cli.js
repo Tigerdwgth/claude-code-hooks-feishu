@@ -56,6 +56,9 @@ async function main() {
   const h5 = await ask('  飞书双向交互 (Stop后继续对话/权限审批) [Y/n]: ');
   config.hooks.interactive = h5.trim().toLowerCase() !== 'n';
 
+  const h6 = await ask('  Write 工具相对路径修复 (子 agent 写文件路径 undefined 修复) [Y/n]: ');
+  config.hooks.fixWritePath = h6.trim().toLowerCase() !== 'n';
+
   if (config.hooks.formatPython) {
     const fmt = await ask('  Python 格式化工具 (black/autopep8) [black]: ');
     if (fmt.trim()) config.pythonFormatter = fmt.trim();
@@ -90,7 +93,7 @@ async function main() {
 
   const srcRoot = path.resolve(__dirname, '..');
   // 复制 hooks
-  for (const f of ['notify.js', 'guard.js', 'interactive.js', 'format-python.sh', 'code-review.sh']) {
+  for (const f of ['notify.js', 'guard.js', 'interactive.js', 'format-python.sh', 'code-review.sh', 'fix-write-path.js']) {
     const src = path.join(srcRoot, 'hooks', f);
     const dst = path.join(hooksDir, f);
     if (fs.existsSync(src)) {
@@ -202,6 +205,19 @@ async function main() {
           hooks: [{ type: 'command', command: nodeCmd('interactive.js') }]
         });
       }
+    }
+  }
+
+  if (config.hooks.fixWritePath) {
+    if (!claudeSettings.hooks.PreToolUse) claudeSettings.hooks.PreToolUse = [];
+    const existingFix = claudeSettings.hooks.PreToolUse.find(h =>
+      h.hooks?.some(hh => hh.command?.includes('fix-write-path.js'))
+    );
+    if (!existingFix) {
+      claudeSettings.hooks.PreToolUse.push({
+        matcher: 'Write',
+        hooks: [{ type: 'command', command: nodeCmd('fix-write-path.js') }]
+      });
     }
   }
 
