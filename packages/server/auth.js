@@ -77,4 +77,11 @@ function authMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { createUser, verifyPassword, generateToken, verifyToken, authMiddleware };
+async function listUsers() {
+  const db = await getDb();
+  const rows = db.exec('SELECT id, username, created_at FROM users');
+  if (!rows.length) return [];
+  return rows[0].values.map(([id, username, created_at]) => ({ id, username, created_at }));
+}
+
+module.exports = { createUser, verifyPassword, generateToken, verifyToken, authMiddleware, listUsers };

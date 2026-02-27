@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import TerminalPanel from './TerminalPanel';
+import AddUser from './AddUser';
 
 export default function Dashboard({ token, onLogout }) {
   const [sessions, setSessions] = useState([]);
-  const [active, setActive] = useState(null); // { machineId, sessionId }
+  const [active, setActive] = useState(null);
   const [wsReady, setWsReady] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function Dashboard({ token, onLogout }) {
   }, {});
 
   return (
+    <>
     <div style={{ display:'flex', height:'100vh', background:'#0d1117', color:'#e6edf3', fontFamily:'monospace', overflow:'hidden' }}>
       {/* 左侧 session 列表 */}
       <div style={{ width:'220px', background:'#161b22', borderRight:'1px solid #30363d', display:'flex', flexDirection:'column', flexShrink:0 }}>
@@ -47,6 +50,7 @@ export default function Dashboard({ token, onLogout }) {
           <span style={{ fontWeight:'bold', fontSize:'0.85rem', color:'#8b949e' }}>SESSIONS</span>
           <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
             <span style={{ width:'6px', height:'6px', borderRadius:'50%', background: wsReady ? '#3fb950' : '#f85149', display:'inline-block' }} />
+            <span onClick={() => setShowAddUser(true)} title="添加用户" style={{ color:'#8b949e', cursor:'pointer', fontSize:'1rem', lineHeight:1 }}>＋</span>
             <button
               onClick={onLogout}
               style={{ background:'none', border:'none', color:'#8b949e', cursor:'pointer', fontSize:'0.75rem', padding:'2px 4px' }}
@@ -104,5 +108,7 @@ export default function Dashboard({ token, onLogout }) {
         )}
       </div>
     </div>
+    {showAddUser && <AddUser token={token} onClose={() => setShowAddUser(false)} />}
+    </>
   );
 }

@@ -1,13 +1,46 @@
 // packages/server/index.js
 const express = require('express');
 const path = require('node:path');
-const { createUser, verifyPassword, generateToken, authMiddleware } = require('./auth');
+const { createUser, verifyPassword, generateToken, authMiddleware, listUsers } = require('./auth');
 
 const app = express();
 app.use(express.json());
 
 // 静态前端（Task 5 填充）
 app.use(express.static(path.join(__dirname, 'frontend/dist')));
+
+// 注册（仅当无用户时开放，或管理员已登录时可创建新用户）
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (username.length < 2) return res.status(400).json({ error: '用户名至少2个字符' });
+  if (password.length < 6) return res.status(400).json({ error: '密码至少6个字符' });
+  // 仅当系统无用户时允许开放注册（首次初始化）
+  const users = await listUsers();
+  if (users.length > 0) return res.status(403).json({ error: '注册已关闭，请联系管理员' });
+  try {
+    const user = await createUser(username, password);
+    const token = generateToken(user);
+    res.json({ token, username: user.username });
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return res.status(409).json({ error: '用户名已存在' });
+    res.status(500).json({ error: '注册失败' });
+  }
+});
+
+// 管理员创建用户
+app.post('/api/admin/users', authMiddleware, async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (password.length < 6) return res.status(400).json({ error: '密码至少6个字符' });
+  try {
+    const user = await createUser(username, password);
+    res.json({ id: user.id, username: user.username });
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return res.status(409).json({ error: '用户名已存在' });
+    res.status(500).json({ error: '创建失败' });
+  }
+});
 
 // 登录
 app.post('/api/login', async (req, res) => {
