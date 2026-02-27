@@ -64,6 +64,13 @@ class RelayServer {
         }
       }
     }
+    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries') {
+      for (const browser of this.browsers.values()) {
+        if (browser.ws.readyState === 1) {
+          browser.ws.send(JSON.stringify({ ...msg, machineId }));
+        }
+      }
+    }
   }
 
   handleBrowserMessage(browserId, raw) {
@@ -85,7 +92,17 @@ class RelayServer {
       browser.ws.send(JSON.stringify({ type: 'session_list', sessions: this.getAllSessions() }));
       return;
     }
-    if (msg.type === 'terminal_input' || msg.type === 'terminal_resize') {
+    if (msg.type === 'terminal_input') {
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'pty_input', sessionId: msg.sessionId, data: msg.data }));
+      }
+    } else if (msg.type === 'terminal_resize') {
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'pty_resize', sessionId: msg.sessionId, cols: msg.cols, rows: msg.rows }));
+      }
+    } else if (msg.type === 'scan_history' || msg.type === 'list_dir') {
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify(msg));
