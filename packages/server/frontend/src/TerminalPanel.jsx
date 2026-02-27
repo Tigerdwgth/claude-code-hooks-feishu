@@ -5,6 +5,8 @@ import '@xterm/xterm/css/xterm.css';
 
 export default function TerminalPanel({ machineId, sessionId, ws }) {
   const containerRef = useRef(null);
+  const wsRef = useRef(ws);
+  useEffect(() => { wsRef.current = ws; }, [ws]);
 
   useEffect(() => {
     const term = new Terminal({
@@ -22,11 +24,13 @@ export default function TerminalPanel({ machineId, sessionId, ws }) {
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
     fitAddon.fit();
+    term.focus();
 
     // 键盘输入 → ws
     const inputDispose = term.onData((data) => {
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
+      const currentWs = wsRef.current;
+      if (currentWs?.readyState === WebSocket.OPEN) {
+        currentWs.send(JSON.stringify({
           type: 'terminal_input',
           machineId,
           sessionId,
@@ -45,14 +49,15 @@ export default function TerminalPanel({ machineId, sessionId, ws }) {
         }
       } catch {}
     }
-    ws?.addEventListener('message', onMessage);
+    wsRef.current?.addEventListener('message', onMessage);
 
     // resize
     const ro = new ResizeObserver(() => {
       try {
         fitAddon.fit();
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
+        const currentWs = wsRef.current;
+        if (currentWs?.readyState === WebSocket.OPEN) {
+          currentWs.send(JSON.stringify({
             type: 'terminal_resize',
             machineId,
             sessionId,
@@ -66,7 +71,7 @@ export default function TerminalPanel({ machineId, sessionId, ws }) {
 
     return () => {
       inputDispose.dispose();
-      ws?.removeEventListener('message', onMessage);
+      wsRef.current?.removeEventListener('message', onMessage);
       ro.disconnect();
       term.dispose();
     };
