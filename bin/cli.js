@@ -61,11 +61,28 @@ async function main() {
     if (fmt.trim()) config.pythonFormatter = fmt.trim();
   }
 
-  // 3. 保存配置
+  // 3. Web Dashboard 配置
+  console.log('\n--- Web Dashboard 配置 ---');
+  const enableDash = await ask('是否启用 Web Dashboard？(y/N): ');
+  if (enableDash.trim().toLowerCase() === 'y') {
+    const serverUrl = await ask('中央服务器 WebSocket 地址 (如 ws://your-server:3000/ws): ');
+    const machineToken = await ask('Machine Token (在中央服务器 MACHINE_TOKENS 环境变量中配置): ');
+    config.centralServer = {
+      enabled: true,
+      url: serverUrl.trim(),
+      machineToken: machineToken.trim(),
+      machineId: ''
+    };
+    console.log('✅ Web Dashboard 已启用，daemon 启动后自动连接中央服务器');
+  } else {
+    config.centralServer = { enabled: false, url: '', machineToken: '', machineId: '' };
+  }
+
+  // 4. 保存配置
   saveConfig(config);
   console.log(`\n✅ 配置已保存到 ${path.join(getBaseDir(), 'config.json')}`);
 
-  // 4. 复制 hooks 脚本到 ~/.claude-hooks-feishu/
+  // 5. 复制 hooks 脚本到 ~/.claude-hooks-feishu/
   const hooksDir = getHooksDir();
   const libDir = path.join(getBaseDir(), 'lib');
   fs.mkdirSync(hooksDir, { recursive: true });
@@ -82,14 +99,14 @@ async function main() {
     }
   }
   // 复制 lib
-  for (const f of ['config.js', 'feishu-webhook.js', 'feishu-app.js', 'sender.js', 'ipc.js', 'card-builder.js', 'daemon.js']) {
+  for (const f of ['config.js', 'feishu-webhook.js', 'feishu-app.js', 'sender.js', 'ipc.js', 'card-builder.js', 'daemon.js', 'session-registry.js', 'message-queue.js']) {
     const src = path.join(srcRoot, 'lib', f);
     const dst = path.join(libDir, f);
     if (fs.existsSync(src)) fs.copyFileSync(src, dst);
   }
   console.log(`✅ Hook 脚本已安装到 ${hooksDir}`);
 
-  // 5. 测试发送
+  // 6. 测试发送
   const doTest = await ask('\n是否发送测试消息? [Y/n]: ');
   if (doTest.trim().toLowerCase() !== 'n') {
     console.log('发送测试消息...');
@@ -109,7 +126,7 @@ async function main() {
     }
   }
 
-  // 6. 注入 hooks 到 ~/.claude/settings.json
+  // 7. 注入 hooks 到 ~/.claude/settings.json
   const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
   let claudeSettings = {};
   if (fs.existsSync(claudeSettingsPath)) {

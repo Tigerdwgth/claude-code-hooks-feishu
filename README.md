@@ -112,6 +112,52 @@ Hook 读取响应 → 输出决策给 Claude Code ← 继续/停止
 
 守护进程未运行时，自动回退到普通通知模式。
 
+## Web Dashboard（v4.0）
+
+通过浏览器管理多台开发机的 Claude Code session，支持完整 PTY 终端交互。
+
+### 部署中央服务器
+
+```bash
+cd packages/server
+npm install
+
+# 构建前端
+cd frontend && npm install && npm run build && cd ..
+
+# 创建管理员账号
+node index.js --create-user admin
+
+# 启动（建议用 nginx 反代）
+MACHINE_TOKENS=your-uuid-token JWT_SECRET=your-secret node index.js --port 3000
+```
+
+### nginx 反代配置（支持 WebSocket）
+
+```nginx
+location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
+### 配置开发机
+
+```bash
+# 重新运行配置向导，选择启用 Web Dashboard
+npx claude-code-hooks-feishu
+
+# 启动 daemon（自动连接中央服务器）
+npx claude-code-hooks-feishu --daemon start
+```
+
+### 访问
+
+浏览器打开 `https://your-server/`，用管理员账号登录，即可看到所有已连接开发机的 session 列表，点击 session 打开完整 PTY 终端。
+
 ## 配置文件
 
 配置存储在 `~/.claude-hooks-feishu/config.json`（不含在仓库中）。
