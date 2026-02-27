@@ -139,7 +139,7 @@ export default function Login({ onLogin, onRegister, isDark, onToggleTheme }) {
             type="submit"
             disabled={loading}
             style={{
-              width: '100%', padding: '0.6rem',
+              width: '100%', padding: '0.6rem', minHeight: '44px',
               background: loading ? T.bgHover : T.accent,
               color: '#fff', border: 'none',
               borderRadius: T.radiusSm, cursor: loading ? 'not-allowed' : 'pointer',

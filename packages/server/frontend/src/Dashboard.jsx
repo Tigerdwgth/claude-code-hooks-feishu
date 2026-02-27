@@ -21,7 +21,16 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [openTerminals, setOpenTerminals]   = useState([]); // [{machineId, sessionId}]
   const [splitTerminals, setSplitTerminals] = useState([]); // 并列显示的 sessionId 列表
   const [splitMode, setSplitMode]           = useState(false);
+  const [isMobile, setIsMobile]             = useState(() => window.innerWidth < 768);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const wsRef = useRef(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -98,6 +107,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
       );
     }
     setActive({ machineId, sessionId });
+    if (isMobile) setMobileMenuOpen(false);
   }
 
   function launchInDir(cwd) {
@@ -134,6 +144,10 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         .topbar-btn:hover { background: ${T.bgHover} !important; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+        @media (max-width: 768px) {
+          button, [role="button"], a { min-height: 44px; min-width: 44px; }
+          .sess-item { padding: 0.5rem 0.6rem !important; }
+        }
       `}</style>
 
       <div style={{
@@ -141,15 +155,40 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         background: T.bgBase, color: T.textPrimary,
         fontFamily: T.fontSans, overflow: 'hidden',
       }}>
+        {/* 移动端汉堡按钮 */}
+        {isMobile && (
+          <button onClick={() => setMobileMenuOpen(true)}
+            style={{
+              position: 'fixed', top: 8, left: 8, zIndex: 1001,
+              background: T.bgCard, border: `1px solid ${T.border}`,
+              color: T.textPrimary, borderRadius: T.radiusSm,
+              cursor: 'pointer', padding: '6px 10px', fontSize: '1rem',
+            }}>
+            ☰
+          </button>
+        )}
+
+        {/* 移动端遮罩层 */}
+        {isMobile && mobileMenuOpen && (
+          <div onClick={() => setMobileMenuOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }} />
+        )}
+
         {/* ── 左侧面板 ── */}
         <div style={{
-          width: `${sidebar.width}px`, flexShrink: 0,
+          width: isMobile ? '280px' : `${sidebar.width}px`,
+          flexShrink: 0,
           background: T.bgPanel,
           borderRight: `1px solid ${T.border}`,
           display: 'flex', flexDirection: 'column',
-          transition: sidebar.dragging ? 'none' : 'width 0.2s ease',
-          overflow: 'hidden', position: 'relative',
-          animation: 'slideIn 0.3s ease',
+          transition: sidebar.dragging ? 'none' : 'width 0.2s ease, transform 0.25s ease',
+          overflow: 'hidden', position: isMobile ? 'fixed' : 'relative',
+          ...(isMobile ? {
+            top: 0, left: 0, bottom: 0, zIndex: 1000,
+            transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
+            boxShadow: mobileMenuOpen ? '4px 0 24px rgba(0,0,0,0.5)' : 'none',
+          } : {}),
+          animation: isMobile ? 'none' : 'slideIn 0.3s ease',
         }}>
           {/* 折叠按钮 */}
           <button
