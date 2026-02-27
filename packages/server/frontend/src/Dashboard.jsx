@@ -42,6 +42,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         if (msg.type === 'session_list')    setSessions(msg.sessions || []);
         if (msg.type === 'active_sessions') setActiveSessions((msg.sessions || []).map(s => ({ ...s, machineId: msg.machineId })));
         if (msg.type === 'session_history') setHistorySessions((msg.sessions || []).map(s => ({ ...s, machineId: s.machineId || msg.machineId })));
+        if (msg.type === 'session_deleted') setHistorySessions(prev => prev.filter(s => s.sessionId !== msg.sessionId));
       } catch {}
     };
     ws.onerror = (e) => console.error('[dashboard] WebSocket error:', e);
@@ -86,6 +87,19 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
     const machineId = sessions[0]?.machineId || activeSessions[0]?.machineId || 'local-dev';
     const sessionId = `new-${Date.now()}`;
     openTerminal(machineId, sessionId, ['claude'], cwd);
+  }
+
+  function deleteSession(machineId, sessionId) {
+    if (!confirm('确定删除此 session？')) return;
+    wsRef.current?.send(JSON.stringify({ type: 'delete_session', machineId, sessionId }));
+    setHistorySessions(prev => prev.filter(s => s.sessionId !== sessionId));
+  }
+
+  function stopSession(machineId, sessionId) {
+    if (!confirm('确定停止此 session？进程将被终止。')) return;
+    wsRef.current?.send(JSON.stringify({ type: 'close_terminal', machineId, sessionId }));
+    setOpenTerminals(prev => prev.filter(t => t.sessionId !== sessionId));
+    if (active?.sessionId === sessionId) setActive(null);
   }
 
   const machineId = sessions[0]?.machineId || activeSessions[0]?.machineId;
@@ -234,6 +248,8 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
               historySessions={historySessions}
               active={active}
               onOpen={openTerminal}
+              onDelete={deleteSession}
+              onStop={stopSession}
             />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '8px 0' }}>

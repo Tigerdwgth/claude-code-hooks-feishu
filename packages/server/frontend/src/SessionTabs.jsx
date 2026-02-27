@@ -73,7 +73,7 @@ function ActiveTab({ sessions, active, onOpen }) {
 }
 
 // ── 运行中 Tab ────────────────────────────────────────────────
-function RunningTab({ activeSessions, active, onOpen }) {
+function RunningTab({ activeSessions, active, onOpen, onStop }) {
   const T = useTheme();
   const byMachine = activeSessions.reduce((acc, s) => {
     const mid = s.machineId || 'local';
@@ -101,7 +101,20 @@ function RunningTab({ activeSessions, active, onOpen }) {
               <span style={{ color: T.textMuted, fontSize: '0.72rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {s.cwd?.split('/').pop() || '/'}
               </span>
+              {s._optimistic && (
+                <span style={{ color: T.warning, fontSize: '0.62rem', animation: 'pulse 1.5s infinite', flexShrink: 0 }}>恢复中…</span>
+              )}
               <span style={{ color: T.textMuted, fontSize: '0.65rem', flexShrink: 0 }}>{timeAgo(s.mtime)}</span>
+              {onStop && (
+                <button
+                  onClick={e => { e.stopPropagation(); onStop(machineId, s.sessionId); }}
+                  title="停止此 session"
+                  style={{
+                    background: 'none', border: 'none', color: T.danger,
+                    cursor: 'pointer', padding: '0 3px', fontSize: '0.7rem',
+                    flexShrink: 0, transition: 'opacity 0.12s',
+                  }}>■</button>
+              )}
             </div>
           ))}
         </div>
@@ -112,7 +125,7 @@ function RunningTab({ activeSessions, active, onOpen }) {
 }
 
 // ── 历史 Tab ──────────────────────────────────────────────────
-function HistoryTab({ historySessions, active, onOpen }) {
+function HistoryTab({ historySessions, active, onOpen, onDelete }) {
   const T = useTheme();
   const [hovered, setHovered] = useState(null);
 
@@ -151,10 +164,12 @@ function HistoryTab({ historySessions, active, onOpen }) {
               {s.timestamp?.slice(0, 10)}
             </span>
           </div>
-          {s.summary && (
+          {s.summary ? (
             <div style={{ color: T.textMuted, fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {s.summary}
             </div>
+          ) : (
+            <span style={{ background: T.bgHover, color: T.textMuted, borderRadius: T.radiusPill, padding: '1px 6px', fontSize: '0.6rem' }}>空会话</span>
           )}
           <div className="hist-actions" style={{ display: 'flex', gap: '4px', marginTop: '3px' }}>
             <button
@@ -177,6 +192,18 @@ function HistoryTab({ historySessions, active, onOpen }) {
                 cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
                 fontFamily: T.fontSans, transition: 'background 0.12s',
               }}>↩ 恢复</button>
+            {onDelete && (
+            <button
+              className="hist-btn"
+              title="删除此 session"
+              onClick={e => { e.stopPropagation(); onDelete(s.machineId || 'local', s.sessionId); }}
+              style={{
+                background: T.bgCard, border: `1px solid ${T.border}`,
+                color: T.danger, borderRadius: '4px',
+                cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
+                fontFamily: T.fontSans, transition: 'background 0.12s',
+              }}>✕ 删除</button>
+            )}
           </div>
         </div>
       ))}
@@ -195,7 +222,7 @@ function EmptyState({ text }) {
 }
 
 // ── 主组件 ────────────────────────────────────────────────────
-export default function SessionTabs({ sessions, activeSessions, historySessions, active, onOpen }) {
+export default function SessionTabs({ sessions, activeSessions, historySessions, active, onOpen, onDelete, onStop }) {
   const T = useTheme();
   const [tab, setTab] = useState('active');
 
@@ -244,8 +271,8 @@ export default function SessionTabs({ sessions, activeSessions, historySessions,
       </div>
 
       {tab === 'active'  && <ActiveTab  sessions={sessions} active={active} onOpen={onOpen} />}
-      {tab === 'running' && <RunningTab activeSessions={activeSessions} active={active} onOpen={onOpen} />}
-      {tab === 'history' && <HistoryTab historySessions={historySessions} active={active} onOpen={onOpen} />}
+      {tab === 'running' && <RunningTab activeSessions={activeSessions} active={active} onOpen={onOpen} onStop={onStop} />}
+      {tab === 'history' && <HistoryTab historySessions={historySessions} active={active} onOpen={onOpen} onDelete={onDelete} />}
     </div>
   );
 }
