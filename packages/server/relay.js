@@ -85,7 +85,7 @@ class RelayServer {
         }
       }
     }
-    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries') {
+    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries' || msg.type === 'session_deleted') {
       for (const browser of this.browsers.values()) {
         if (browser.ws.readyState === 1) {
           browser.ws.send(JSON.stringify({ ...msg, machineId }));
@@ -134,6 +134,19 @@ class RelayServer {
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify(msg));
+      }
+    } else if (msg.type === 'pty_attach') {
+      browser.watchingMachine = msg.machineId;
+      browser.watchingSession = msg.sessionId;
+    } else if (msg.type === 'close_terminal') {
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'pty_close', sessionId: msg.sessionId }));
+      }
+    } else if (msg.type === 'delete_session') {
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'delete_session', sessionId: msg.sessionId }));
       }
     }
   }
