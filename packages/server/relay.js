@@ -9,8 +9,9 @@ const MACHINE_TOKENS = new Set(
 class RelayServer {
   constructor() {
     this.machines = new Map();   // machineId → { ws, sessions }
-    this.browsers = new Map();   // browserId → { ws, watchingMachine, watchingSession }
+    this.browsers = new Map();   // browserId → { ws, watching: Set<"machineId:sessionId"> }
     this._browserId = 0;
+    this._lastSessionListHash = '';  // 广播 diff 检测
   }
 
   registerMachine(machineId, ws) {
@@ -43,6 +44,9 @@ class RelayServer {
   _broadcastSessionList() {
     const sessions = this.getAllSessions();
     const msg = JSON.stringify({ type: 'session_list', sessions });
+    // diff 检测：内容不变则跳过广播
+    if (msg === this._lastSessionListHash) return;
+    this._lastSessionListHash = msg;
     for (const { ws } of this.browsers.values()) {
       if (ws.readyState === 1) ws.send(msg);
     }
@@ -50,7 +54,7 @@ class RelayServer {
 
   _addBrowser(ws) {
     const browserId = ++this._browserId;
-    this.browsers.set(browserId, { ws, watchingMachine: null, watchingSession: null });
+    this.browsers.set(browserId, { ws, watching: new Set() });
     const allSessions = this.getAllSessions();
     console.log(`[relay] browser #${browserId} connected, ${allSessions.length} sessions, ${this.machines.size} machines`);
     ws.send(JSON.stringify({ type: 'session_list', sessions: allSessions }));
@@ -77,15 +81,14 @@ class RelayServer {
       return;
     }
     if (msg.type === 'pty_data') {
+      const watchKey = `${machineId}:${msg.sessionId}`;
       for (const browser of this.browsers.values()) {
-        if (browser.watchingMachine === machineId &&
-            browser.watchingSession === msg.sessionId &&
-            browser.ws.readyState === 1) {
+        if (browser.watching.has(watchKey) && browser.ws.readyState === 1) {
           browser.ws.send(JSON.stringify(msg));
         }
       }
     }
-    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries' || msg.type === 'session_deleted') {
+    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries' || msg.type === 'session_deleted' || msg.type === 'file_content') {
       for (const browser of this.browsers.values()) {
         if (browser.ws.readyState === 1) {
           browser.ws.send(JSON.stringify({ ...msg, machineId }));
@@ -101,8 +104,7 @@ class RelayServer {
     if (!browser) return;
 
     if (msg.type === 'open_terminal') {
-      browser.watchingMachine = msg.machineId;
-      browser.watchingSession = msg.sessionId;
+      browser.watching.add(`${msg.machineId}:${msg.sessionId}`);
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({
@@ -136,9 +138,9 @@ class RelayServer {
         machine.ws.send(JSON.stringify(msg));
       }
     } else if (msg.type === 'pty_attach') {
-      browser.watchingMachine = msg.machineId;
-      browser.watchingSession = msg.sessionId;
+      browser.watching.add(`${msg.machineId}:${msg.sessionId}`);
     } else if (msg.type === 'close_terminal') {
+      browser.watching.delete(`${msg.machineId}:${msg.sessionId}`);
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({ type: 'pty_close', sessionId: msg.sessionId }));
@@ -148,12 +150,17 @@ class RelayServer {
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({ type: 'delete_session', sessionId: msg.sessionId }));
       }
+    } else if (msg.type === 'read_file') {
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'read_file', path: msg.path }));
+      }
     }
   }
 
   attachToHttpServer(server) {
     // 不限制 path，让代理转发的各种路径都能连接（如 /proxy/3000/ws）
-    const wss = new WebSocketServer({ noServer: true });
+    const wss = new WebSocketServer({ noServer: true, perMessageDeflate: true });
     server.on('upgrade', (req, socket, head) => {
       // 只要路径以 /ws 结尾就接受
       const pathname = new URL(req.url, 'http://localhost').pathname;

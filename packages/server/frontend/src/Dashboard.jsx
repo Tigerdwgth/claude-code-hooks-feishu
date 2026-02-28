@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import TerminalPanel from './TerminalPanel';
 import AddUser from './AddUser';
 import SessionTabs from './SessionTabs';
-import FileBrowser from './FileBrowser';
 import PixelView from './PixelView';
+import MarkdownPreview from './MarkdownPreview';
 import { useTheme } from './theme';
 import useResizable from './useResizable';
 
@@ -16,9 +16,9 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [active, setActive]                 = useState(null);
   const [wsReady, setWsReady]               = useState(false);
   const [showAddUser, setShowAddUser]       = useState(false);
-  const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [viewMode, setViewMode]             = useState('terminal');
-  const [openTerminals, setOpenTerminals]   = useState([]); // [{machineId, sessionId}]
+  const [mdPreview, setMdPreview]           = useState(null); // { path, content } or null
+  const [openTerminals, setOpenTerminals]   = useState([]); // [{machineId, sessionId, cwd}]
   const [splitTerminals, setSplitTerminals] = useState([]); // 并列显示的 sessionId 列表
   const [splitMode, setSplitMode]           = useState(false);
   const [isMobile, setIsMobile]             = useState(() => window.innerWidth < 768);
@@ -50,14 +50,21 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
         console.log('[dashboard] ←', msg.type);
         if (msg.type === 'session_list')    setSessions(msg.sessions || []);
         if (msg.type === 'active_sessions') {
-          const serverSessions = (msg.sessions || []).map(s => ({ ...s, machineId: msg.machineId }));
+          const mid = msg.machineId;
+          const serverSessions = (msg.sessions || []).map(s => ({ ...s, machineId: mid }));
           setActiveSessions(prev => {
+            // 保留其他机器的 session，只替换当前机器的
+            const otherMachines = prev.filter(s => s.machineId !== mid && !s._optimistic);
             const optimistic = prev.filter(s => s._optimistic && !serverSessions.some(ss => ss.sessionId === s.sessionId));
-            return [...serverSessions, ...optimistic];
+            return [...otherMachines, ...serverSessions, ...optimistic];
           });
         }
         if (msg.type === 'session_history') setHistorySessions((msg.sessions || []).map(s => ({ ...s, machineId: s.machineId || msg.machineId })));
         if (msg.type === 'session_deleted') setHistorySessions(prev => prev.filter(s => s.sessionId !== msg.sessionId));
+        if (msg.type === 'file_content') {
+          if (msg.error) { alert(`文件读取失败: ${msg.error}`); }
+          else { setMdPreview({ path: msg.path, content: msg.content }); setViewMode('markdown'); }
+        }
       } catch {}
     };
     ws.onerror = (e) => console.error('[dashboard] WebSocket error:', e);
@@ -71,11 +78,10 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   }, [token]);
 
   function openTerminal(machineId, sessionId, command, cwd) {
-    setShowFileBrowser(false);
     const isResume = command?.includes('--resume');
     const exists = openTerminals.some(t => t.sessionId === sessionId);
     if (!exists) {
-      setOpenTerminals(prev => [...prev, { machineId, sessionId }]);
+      setOpenTerminals(prev => [...prev, { machineId, sessionId, cwd }]);
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'open_terminal', machineId, sessionId,
@@ -111,9 +117,14 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   }
 
   function launchInDir(cwd) {
-    const machineId = sessions[0]?.machineId || activeSessions[0]?.machineId || 'local-dev';
+    const mid = sessions[0]?.machineId || activeSessions[0]?.machineId || 'local-dev';
     const sessionId = `new-${Date.now()}`;
-    openTerminal(machineId, sessionId, ['claude'], cwd);
+    openTerminal(mid, sessionId, ['claude'], cwd);
+  }
+
+  function previewMd(filePath) {
+    const mid = sessions[0]?.machineId || activeSessions[0]?.machineId || 'local-dev';
+    wsRef.current?.send(JSON.stringify({ type: 'read_file', machineId: mid, path: filePath }));
   }
 
   function deleteSession(machineId, sessionId) {
@@ -252,18 +263,6 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
             }}>Sessions</span>
             <button
               className="sidebar-btn"
-              onClick={() => setShowFileBrowser(v => !v)}
-              title="新建终端"
-              style={{
-                background: showFileBrowser ? T.accentDim : 'none',
-                border: `1px solid ${showFileBrowser ? T.borderAccent : 'transparent'}`,
-                color: showFileBrowser ? T.accent : T.textMuted,
-                borderRadius: T.radiusSm, cursor: 'pointer',
-                padding: '3px 7px', fontSize: '0.8rem',
-                transition: 'all 0.15s',
-              }}>＋</button>
-            <button
-              className="sidebar-btn"
               onClick={() => setShowAddUser(true)}
               title="添加用户"
               style={{
@@ -285,27 +284,21 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           </div>
           )}
 
-          {/* 文件浏览器 */}
-          {showFileBrowser && !sidebar.collapsed && (
-            <FileBrowser
-              ws={wsRef.current}
-              machineId={sessions[0]?.machineId || 'local'}
-              historySessions={historySessions}
-              onLaunch={launchInDir}
-              onClose={() => setShowFileBrowser(false)}
-            />
-          )}
-
           {/* Session Tabs */}
           {!sidebar.collapsed ? (
             <SessionTabs
               sessions={sessions}
               activeSessions={activeSessions}
               historySessions={historySessions}
+              openTerminals={openTerminals}
               active={active}
               onOpen={openTerminal}
               onDelete={deleteSession}
               onStop={stopSession}
+              ws={wsRef.current}
+              machineId={sessions[0]?.machineId || activeSessions[0]?.machineId || 'local'}
+              onLaunch={launchInDir}
+              onPreviewMd={previewMd}
             />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '8px 0' }}>
@@ -356,15 +349,19 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           >
             {isDark ? '☀' : '🌙'}
           </button>
-          {['terminal', 'pixel'].map(mode => (
+          {[
+            { key: 'terminal', label: '⌨ 终端' },
+            { key: 'pixel', label: '🎮 像素' },
+            ...(mdPreview ? [{ key: 'markdown', label: '📄 预览' }] : []),
+          ].map(({ key, label }) => (
               <button
-                key={mode}
+                key={key}
                 className="view-pill"
-                onClick={() => setViewMode(mode)}
+                onClick={() => setViewMode(key)}
                 style={{
-                  background: viewMode === mode ? T.bgHover : 'none',
-                  border: `1px solid ${viewMode === mode ? T.border : 'transparent'}`,
-                  color: viewMode === mode ? T.textPrimary : T.textMuted,
+                  background: viewMode === key ? T.bgHover : 'none',
+                  border: `1px solid ${viewMode === key ? T.border : 'transparent'}`,
+                  color: viewMode === key ? T.textPrimary : T.textMuted,
                   borderRadius: T.radiusPill,
                   cursor: 'pointer', padding: '3px 12px',
                   fontSize: '0.72rem', fontWeight: 500,
@@ -372,7 +369,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                   transition: 'all 0.15s',
                 }}
               >
-                {mode === 'terminal' ? '⌨ 终端' : '🎮 像素'}
+                {label}
               </button>
             ))}
             <button
@@ -404,6 +401,12 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           {/* 内容区 */}
           {viewMode === 'pixel' ? (
             <PixelView ws={wsRef.current} activeSessions={activeSessions} />
+          ) : viewMode === 'markdown' && mdPreview ? (
+            <MarkdownPreview
+              path={mdPreview.path}
+              content={mdPreview.content}
+              onClose={() => { setMdPreview(null); setViewMode('terminal'); }}
+            />
           ) : (
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               {openTerminals.map(t => (
@@ -436,7 +439,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                     选择 Session 或新建终端
                   </div>
                   <div style={{ fontSize: '0.78rem', color: T.textMuted }}>
-                    从左侧面板选择，或点击 ＋ 按钮
+                    从左侧面板选择，或点击"目录" Tab
                   </div>
                 </div>
               )}

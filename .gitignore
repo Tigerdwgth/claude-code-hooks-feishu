@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.log
 config.json
+scope_version_cache.json
+tmp/

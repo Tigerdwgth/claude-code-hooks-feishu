@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTheme } from './theme';
+import FileBrowser from './FileBrowser';
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -33,41 +34,52 @@ const machineBadge = (T) => ({
   marginBottom: '4px', marginTop: '2px',
 });
 
-// ── 活跃 Tab ──────────────────────────────────────────────────
-function ActiveTab({ sessions, active, onOpen }) {
+// ── 已打开 Tab ──────────────────────────────────────────────────
+function OpenedTab({ openTerminals, active, onOpen, onStop }) {
   const T = useTheme();
-  const byMachine = sessions.reduce((acc, s) => {
-    (acc[s.machineId] = acc[s.machineId] || []).push(s);
+  const byMachine = openTerminals.reduce((acc, t) => {
+    const mid = t.machineId || 'local';
+    (acc[mid] = acc[mid] || []).push(t);
     return acc;
   }, {});
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
       <style>{`.sess-item:hover { background: ${T.bgHover} !important; color: ${T.textPrimary} !important; }`}</style>
-      {Object.entries(byMachine).map(([machineId, sess]) => (
+      {Object.entries(byMachine).map(([machineId, terms]) => (
         <div key={machineId} style={{ marginBottom: '0.75rem' }}>
           <div style={machineBadge(T)}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: T.success, display: 'inline-block' }} />
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: T.accent, display: 'inline-block' }} />
             {machineId}
           </div>
-          {sess.map(s => (
+          {terms.map(t => (
             <div
-              key={s.id}
+              key={t.sessionId}
               className="sess-item"
-              onClick={() => onOpen(machineId, s.id, ['claude'], s.cwd)}
-              style={itemStyle(T, active?.sessionId === s.id && active?.machineId === machineId)}
+              onClick={() => onOpen(machineId, t.sessionId)}
+              style={itemStyle(T, active?.sessionId === t.sessionId && active?.machineId === machineId)}
             >
-              <span style={{ fontFamily: T.fontMono, fontSize: '0.72rem', opacity: 0.7 }}>{s.id.slice(0, 7)}</span>
-              {s.cwd && (
-                <span style={{ color: T.textMuted, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.cwd.split('/').pop() || '/'}
+              <span style={{ fontFamily: T.fontMono, fontSize: '0.72rem', opacity: 0.7 }}>{t.sessionId.slice(0, 7)}</span>
+              {t.cwd && (
+                <span style={{ color: T.textMuted, fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  {t.cwd.split('/').pop() || '/'}
                 </span>
+              )}
+              {onStop && (
+                <button
+                  onClick={e => { e.stopPropagation(); onStop(machineId, t.sessionId); }}
+                  title="停止此终端"
+                  style={{
+                    background: 'none', border: 'none', color: T.danger,
+                    cursor: 'pointer', padding: '0 3px', fontSize: '0.7rem',
+                    flexShrink: 0, transition: 'opacity 0.12s',
+                  }}>■</button>
               )}
             </div>
           ))}
         </div>
       ))}
-      {sessions.length === 0 && <EmptyState text="等待开发机连接…" />}
+      {openTerminals.length === 0 && <EmptyState text="暂无已打开的终端" />}
     </div>
   );
 }
@@ -222,14 +234,15 @@ function EmptyState({ text }) {
 }
 
 // ── 主组件 ────────────────────────────────────────────────────
-export default function SessionTabs({ sessions, activeSessions, historySessions, active, onOpen, onDelete, onStop }) {
+export default function SessionTabs({ sessions, activeSessions, historySessions, openTerminals, active, onOpen, onDelete, onStop, ws, machineId, onLaunch, onPreviewMd }) {
   const T = useTheme();
-  const [tab, setTab] = useState('active');
+  const [tab, setTab] = useState('opened');
 
   const tabs = [
-    { key: 'active',  label: '活跃',  count: sessions.length },
+    { key: 'opened',  label: '已打开', count: openTerminals.length },
     { key: 'running', label: '运行中', count: activeSessions.length },
     { key: 'history', label: '历史',  count: historySessions.length },
+    { key: 'files',   label: '目录' },
   ];
 
   return (
@@ -270,9 +283,10 @@ export default function SessionTabs({ sessions, activeSessions, historySessions,
         ))}
       </div>
 
-      {tab === 'active'  && <ActiveTab  sessions={sessions} active={active} onOpen={onOpen} />}
+      {tab === 'opened'  && <OpenedTab  openTerminals={openTerminals} active={active} onOpen={onOpen} onStop={onStop} />}
       {tab === 'running' && <RunningTab activeSessions={activeSessions} active={active} onOpen={onOpen} onStop={onStop} />}
       {tab === 'history' && <HistoryTab historySessions={historySessions} active={active} onOpen={onOpen} onDelete={onDelete} />}
+      {tab === 'files'   && <FileBrowser ws={ws} machineId={machineId} historySessions={historySessions} onLaunch={onLaunch} onPreviewMd={onPreviewMd} />}
     </div>
   );
 }

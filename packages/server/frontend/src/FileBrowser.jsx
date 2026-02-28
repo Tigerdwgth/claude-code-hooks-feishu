@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from './theme';
 
-function DirTree({ ws, machineId, rootPath, onLaunch }) {
+function DirTree({ ws, machineId, rootPath, onLaunch, onPreviewMd }) {
   const T = useTheme();
   const [entries, setEntries]   = useState(null);
   const [expanded, setExpanded] = useState({});
@@ -25,6 +25,8 @@ function DirTree({ ws, machineId, rootPath, onLaunch }) {
     <div style={{ color: T.textMuted, fontSize: '0.72rem', padding: '0.25rem 0.75rem' }}>加载中…</div>
   );
 
+  const isMd = (name) => name.endsWith('.md') || name.endsWith('.markdown');
+
   return (
     <div>
       <style>{`.dir-row:hover { background: ${T.bgHover} !important; } .dir-launch:hover { background: ${T.accentDim} !important; color: ${T.accent} !important; }`}</style>
@@ -38,34 +40,53 @@ function DirTree({ ws, machineId, rootPath, onLaunch }) {
               transition: 'background 0.1s',
             }}
           >
-            <span
-              onClick={() => setExpanded(p => ({ ...p, [entry.path]: !p[entry.path] }))}
-              style={{ color: T.textMuted, fontSize: '0.6rem', width: '10px', userSelect: 'none', flexShrink: 0 }}
-            >
-              {expanded[entry.path] ? '▼' : '▶'}
-            </span>
-            <span style={{ fontSize: '0.72rem' }}>📁</span>
-            <span
-              style={{ flex: 1, color: T.textSecondary, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              onClick={() => setExpanded(p => ({ ...p, [entry.path]: !p[entry.path] }))}
-            >
-              {entry.name}
-            </span>
-            <button
-              className="dir-launch"
-              title={`在 ${entry.path} 启动`}
-              onClick={() => onLaunch(entry.path)}
-              style={{
-                background: 'none', border: `1px solid ${T.border}`,
-                color: T.textMuted, borderRadius: '4px',
-                cursor: 'pointer', padding: '1px 5px', fontSize: '0.65rem',
-                flexShrink: 0, transition: 'all 0.12s',
-              }}
-            >▶</button>
+            {entry.type === 'dir' ? (
+              <>
+                <span
+                  onClick={() => setExpanded(p => ({ ...p, [entry.path]: !p[entry.path] }))}
+                  style={{ color: T.textMuted, fontSize: '0.6rem', width: '10px', userSelect: 'none', flexShrink: 0 }}
+                >
+                  {expanded[entry.path] ? '▼' : '▶'}
+                </span>
+                <span style={{ fontSize: '0.72rem' }}>📁</span>
+                <span
+                  style={{ flex: 1, color: T.textSecondary, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => setExpanded(p => ({ ...p, [entry.path]: !p[entry.path] }))}
+                >
+                  {entry.name}
+                </span>
+                <button
+                  className="dir-launch"
+                  title={`在 ${entry.path} 启动`}
+                  onClick={() => onLaunch(entry.path)}
+                  style={{
+                    background: 'none', border: `1px solid ${T.border}`,
+                    color: T.textMuted, borderRadius: '4px',
+                    cursor: 'pointer', padding: '1px 5px', fontSize: '0.65rem',
+                    flexShrink: 0, transition: 'all 0.12s',
+                  }}
+                >▶</button>
+              </>
+            ) : (
+              <>
+                <span style={{ width: '10px', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.72rem' }}>{isMd(entry.name) ? '📄' : '📃'}</span>
+                <span
+                  style={{
+                    flex: 1, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    color: isMd(entry.name) ? T.accent : T.textMuted,
+                    cursor: isMd(entry.name) ? 'pointer' : 'default',
+                  }}
+                  onClick={() => isMd(entry.name) && onPreviewMd?.(entry.path)}
+                >
+                  {entry.name}
+                </span>
+              </>
+            )}
           </div>
-          {expanded[entry.path] && (
+          {entry.type === 'dir' && expanded[entry.path] && (
             <div style={{ paddingLeft: '14px' }}>
-              <DirTree ws={ws} machineId={machineId} rootPath={entry.path} onLaunch={onLaunch} />
+              <DirTree ws={ws} machineId={machineId} rootPath={entry.path} onLaunch={onLaunch} onPreviewMd={onPreviewMd} />
             </div>
           )}
         </div>
@@ -74,7 +95,7 @@ function DirTree({ ws, machineId, rootPath, onLaunch }) {
   );
 }
 
-export default function FileBrowser({ ws, machineId, historySessions, onLaunch, onClose }) {
+export default function FileBrowser({ ws, machineId, historySessions, onLaunch, onPreviewMd }) {
   const T = useTheme();
   const [manualPath, setManualPath] = useState('');
 
@@ -82,23 +103,11 @@ export default function FileBrowser({ ws, machineId, historySessions, onLaunch, 
 
   return (
     <div style={{
-      background: T.bgCard,
-      border: `1px solid ${T.border}`,
-      borderRadius: T.radiusMd,
-      margin: '0.5rem',
-      padding: '0.75rem',
+      flex: 1, overflowY: 'auto',
+      padding: '0.5rem',
       fontSize: '0.78rem',
     }}>
       <style>{`.recent-tag:hover { background: ${T.accentDim} !important; border-color: ${T.borderAccent} !important; color: ${T.accent} !important; } .path-input:focus { border-color: ${T.borderAccent} !important; box-shadow: 0 0 0 2px ${T.accentDim}; }`}</style>
-
-      {/* 标题栏 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-        <span style={{ color: T.textSecondary, fontWeight: 600, fontSize: '0.75rem' }}>新建终端</span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: '0.9rem', lineHeight: 1, padding: '2px' }}
-        >✕</button>
-      </div>
 
       {/* 最近目录 — 标签云 */}
       {recentDirs.length > 0 && (
@@ -129,9 +138,7 @@ export default function FileBrowser({ ws, machineId, historySessions, onLaunch, 
       {/* 目录树 */}
       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: '0.5rem', marginBottom: '0.5rem' }}>
         <div style={{ color: T.textMuted, fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.35rem' }}>目录树</div>
-        <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
-          <DirTree ws={ws} machineId={machineId} rootPath="/" onLaunch={onLaunch} />
-        </div>
+        <DirTree ws={ws} machineId={machineId} rootPath="/" onLaunch={onLaunch} onPreviewMd={onPreviewMd} />
       </div>
 
       {/* 手动输入 */}
