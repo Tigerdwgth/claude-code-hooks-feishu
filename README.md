@@ -116,47 +116,130 @@ Hook 读取响应 → 输出决策给 Claude Code ← 继续/停止
 
 通过浏览器管理多台开发机的 Claude Code session，支持完整 PTY 终端交互。
 
-### 部署中央服务器
+```
+开发机A (daemon + ws-client) ─────┐
+开发机B (daemon + ws-client) ─────┼──▶ 中央服务器 (relay) ◀── 浏览器
+开发机C (daemon + ws-client) ─────┘        │
+                                       Web Dashboard
+                                       (React 前端)
+```
+
+### 部署中央服务器（Ubuntu）
+
+**1. 安装 Node.js**
 
 ```bash
-cd packages/server
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+source ~/.bashrc
+nvm install 25 && nvm use 25
+```
+
+**2. 克隆项目并安装依赖**
+
+```bash
+git clone https://github.com/Tigerdwgth/claude-code-hooks-feishu.git /opt/claude-hooks-feishu
+cd /opt/claude-hooks-feishu
 npm install
 
 # 构建前端
-cd frontend && npm install && npm run build && cd ..
-
-# 创建管理员账号
-node index.js --create-user admin
-
-# 启动（建议用 nginx 反代）
-MACHINE_TOKENS=your-uuid-token JWT_SECRET=your-secret node index.js --port 3000
+cd packages/server/frontend && npm install && npm run build && cd ../../..
 ```
 
-### nginx 反代配置（支持 WebSocket）
+**3. 为每台开发机生成 machine token**
+
+```bash
+# 每台开发机执行一次，生成各自的 UUID token
+node -e "const {randomUUID}=require('crypto'); console.log(randomUUID())"
+```
+
+记录生成的 token，后续配置开发机时使用。
+
+**4. 创建管理员账号**
+
+```bash
+cd /opt/claude-hooks-feishu
+MACHINE_TOKENS=<token1>,<token2> JWT_SECRET=<随机字符串> \
+  node packages/server/index.js --create-user admin
+```
+
+**5. 配置 systemd 服务**
+
+```bash
+cat > /etc/systemd/system/claude-dashboard.service << 'EOF'
+[Unit]
+Description=Claude Code Dashboard Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/claude-hooks-feishu
+Environment=PORT=3000
+Environment=JWT_SECRET=<你的随机字符串>
+Environment=MACHINE_TOKENS=<token1>,<token2>
+ExecStart=/root/.nvm/versions/node/v25.8.0/bin/node packages/server/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable claude-dashboard
+systemctl start claude-dashboard
+```
+
+**6. Nginx 反代配置（支持 WebSocket）**
 
 ```nginx
-location / {
-    proxy_pass http://localhost:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
+server {
+    listen 80;
+    server_name your-server.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 }
 ```
 
-### 配置开发机
+---
+
+### 配置开发机连接中央服务器
+
+每台开发机安装本项目后，编辑 `~/.claude-hooks-feishu/config.json`，填入 `centralServer` 配置：
+
+```json
+{
+  "centralServer": {
+    "enabled": true,
+    "url": "ws://your-server.com/ws",
+    "machineToken": "<该机器对应的 token>",
+    "machineId": "dev-machine-1"
+  }
+}
+```
+
+也可以重新运行配置向导，在 Web Dashboard 配置环节填写：
 
 ```bash
-# 重新运行配置向导，选择启用 Web Dashboard
 npx claude-code-hooks-feishu
+```
 
-# 启动 daemon（自动连接中央服务器）
+配置完成后启动 daemon（自动连接中央服务器）：
+
+```bash
 npx claude-code-hooks-feishu --daemon start
 ```
 
 ### 访问
 
-浏览器打开 `https://your-server/`，用管理员账号登录，即可看到所有已连接开发机的 session 列表，点击 session 打开完整 PTY 终端。
+浏览器打开 `http://your-server.com/`，用管理员账号登录，即可看到所有已连接开发机的 session 列表，点击 session 打开完整 PTY 终端。
 
 ## 配置文件
 
