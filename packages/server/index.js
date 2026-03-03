@@ -1,7 +1,7 @@
 // packages/server/index.js
 const express = require('express');
 const path = require('node:path');
-const { createUser, verifyPassword, generateToken, authMiddleware, listUsers } = require('./auth');
+const { createUser, verifyPassword, generateToken, authMiddleware, listUsers, updatePassword } = require('./auth');
 
 const app = express();
 app.use(express.json());
@@ -55,6 +55,28 @@ app.post('/api/login', async (req, res) => {
 // 当前用户信息
 app.get('/api/me', authMiddleware, (req, res) => {
   res.json({ username: req.user.username });
+});
+
+// 修改密码
+app.post('/api/change-password', authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: '旧密码和新密码不能为空' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码至少6个字符' });
+  }
+
+  try {
+    const { updatePassword } = require('./auth');
+    await updatePassword(req.user.username, oldPassword, newPassword);
+    res.json({ success: true, message: '密码修改成功' });
+  } catch (e) {
+    if (e.message.includes('Invalid old password')) {
+      return res.status(401).json({ error: '旧密码错误' });
+    }
+    res.status(500).json({ error: '修改失败' });
+  }
 });
 
 // 获取指定机器的目录列表

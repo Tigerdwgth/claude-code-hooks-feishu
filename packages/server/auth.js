@@ -84,4 +84,22 @@ async function listUsers() {
   return rows[0].values.map(([id, username, created_at]) => ({ id, username, created_at }));
 }
 
-module.exports = { createUser, verifyPassword, generateToken, verifyToken, authMiddleware, listUsers };
+async function updatePassword(username, oldPassword, newPassword) {
+  const db = await getDb();
+  const rows = db.exec('SELECT id, username, password_hash FROM users WHERE username = ?', [username]);
+  if (!rows.length || !rows[0].values.length) throw new Error('User not found');
+
+  const [id, uname, hash] = rows[0].values[0];
+
+  // 验证旧密码
+  const valid = await bcrypt.compare(oldPassword, hash);
+  if (!valid) throw new Error('Invalid old password');
+
+  // 更新密码
+  const newHash = await bcrypt.hash(newPassword, 12);
+  db.run('UPDATE users SET password_hash = ? WHERE username = ?', [newHash, username]);
+  saveDb(db);
+  return true;
+}
+
+module.exports = { createUser, verifyPassword, generateToken, verifyToken, authMiddleware, listUsers, updatePassword };
