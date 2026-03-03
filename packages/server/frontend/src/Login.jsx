@@ -107,11 +107,14 @@ export default function Login({ onLogin, onRegister, isDark, onToggleTheme }) {
           }}>{error}</div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="on">
           <div style={{ marginBottom: '0.75rem' }}>
             <label style={{ display: 'block', color: T.textSecondary, fontSize: '0.78rem', marginBottom: '0.35rem', fontWeight: 500 }}>用户名</label>
             <input
               className="login-input"
+              type="text"
+              name="username"
+              autoComplete="username"
               placeholder="输入用户名"
               value={username}
               onChange={e => setUsername(e.target.value)}
@@ -126,6 +129,8 @@ export default function Login({ onLogin, onRegister, isDark, onToggleTheme }) {
             <input
               className="login-input"
               type="password"
+              name="password"
+              autoComplete="current-password"
               placeholder="输入密码"
               value={password}
               onChange={e => setPassword(e.target.value)}
