@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import TerminalPanel from './TerminalPanel';
 import AddUser from './AddUser';
 import SessionTabs from './SessionTabs';
 import PixelView from './PixelView';
 import MarkdownPreview from './MarkdownPreview';
+import MachineSelector from './MachineSelector';
 import { useTheme } from './theme';
 import useResizable from './useResizable';
 import { playSound } from './sound';
@@ -24,7 +25,24 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [splitMode, setSplitMode]           = useState(false);
   const [isMobile, setIsMobile]             = useState(() => window.innerWidth < 768);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState('');
   const wsRef = useRef(null);
+
+  const machines = useMemo(() => {
+    const map = new Map();
+    sessions.forEach(s => {
+      if (!map.has(s.machineId)) {
+        map.set(s.machineId, { machineId: s.machineId, sessionCount: 0 });
+      }
+      map.get(s.machineId).sessionCount++;
+    });
+    return Array.from(map.values());
+  }, [sessions]);
+
+  const filteredSessions = useMemo(() => {
+    if (!selectedMachine) return sessions;
+    return sessions.filter(s => s.machineId === selectedMachine);
+  }, [sessions, selectedMachine]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)');
@@ -294,20 +312,27 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
 
           {/* Session Tabs */}
           {!sidebar.collapsed ? (
-            <SessionTabs
-              sessions={sessions}
-              activeSessions={activeSessions}
-              historySessions={historySessions}
-              openTerminals={openTerminals}
-              active={active}
-              onOpen={openTerminal}
-              onDelete={deleteSession}
-              onStop={stopSession}
-              ws={wsRef.current}
-              machineId={sessions[0]?.machineId || activeSessions[0]?.machineId || 'local'}
-              onLaunch={launchInDir}
-              onPreviewMd={previewMd}
-            />
+            <>
+              <MachineSelector
+                machines={machines}
+                currentMachine={selectedMachine}
+                onSelect={setSelectedMachine}
+              />
+              <SessionTabs
+                sessions={filteredSessions}
+                activeSessions={activeSessions}
+                historySessions={historySessions}
+                openTerminals={openTerminals}
+                active={active}
+                onOpen={openTerminal}
+                onDelete={deleteSession}
+                onStop={stopSession}
+                ws={wsRef.current}
+                machineId={sessions[0]?.machineId || activeSessions[0]?.machineId || 'local'}
+                onLaunch={launchInDir}
+                onPreviewMd={previewMd}
+              />
+            </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '8px 0' }}>
               <button className="sidebar-btn" onClick={() => sidebar.toggle()} title="活跃" style={{ background: 'none', border: 'none', color: T.textMuted, cursor: 'pointer', fontSize: '1rem', padding: '6px' }}>📡</button>
