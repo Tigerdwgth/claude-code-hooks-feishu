@@ -6,6 +6,11 @@ const MACHINE_TOKENS = new Set(
   (process.env.MACHINE_TOKENS || '').split(',').filter(Boolean)
 );
 
+/** 运行时追加 token（供 CLI 从 config 注入） */
+function addMachineTokens(tokens) {
+  for (const t of tokens) if (t) MACHINE_TOKENS.add(t);
+}
+
 class RelayServer {
   constructor() {
     this.machines = new Map();   // machineId → { ws, sessions }
@@ -88,7 +93,7 @@ class RelayServer {
         }
       }
     }
-    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries' || msg.type === 'session_deleted' || msg.type === 'file_content') {
+    if (msg.type === 'active_sessions' || msg.type === 'session_history' || msg.type === 'dir_entries' || msg.type === 'session_deleted' || msg.type === 'file_content' || msg.type === 'hook_event') {
       for (const browser of this.browsers.values()) {
         if (browser.ws.readyState === 1) {
           browser.ws.send(JSON.stringify({ ...msg, machineId }));
@@ -140,10 +145,18 @@ class RelayServer {
     } else if (msg.type === 'pty_attach') {
       browser.watching.add(`${msg.machineId}:${msg.sessionId}`);
     } else if (msg.type === 'close_terminal') {
+      // 关闭浏览器 tab：断开 PTY attach，但保留 tmux（claude 继续跑）
       browser.watching.delete(`${msg.machineId}:${msg.sessionId}`);
       const machine = this.machines.get(msg.machineId);
       if (machine && machine.ws.readyState === 1) {
         machine.ws.send(JSON.stringify({ type: 'pty_close', sessionId: msg.sessionId }));
+      }
+    } else if (msg.type === 'stop_terminal') {
+      // 停止进程：kill tmux session（真正终止 claude）
+      browser.watching.delete(`${msg.machineId}:${msg.sessionId}`);
+      const machine = this.machines.get(msg.machineId);
+      if (machine && machine.ws.readyState === 1) {
+        machine.ws.send(JSON.stringify({ type: 'pty_kill', sessionId: msg.sessionId }));
       }
     } else if (msg.type === 'delete_session') {
       const machine = this.machines.get(msg.machineId);
@@ -199,4 +212,4 @@ class RelayServer {
   }
 }
 
-module.exports = { RelayServer };
+module.exports = { RelayServer, addMachineTokens };

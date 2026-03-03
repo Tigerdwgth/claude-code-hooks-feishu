@@ -1,32 +1,67 @@
 import { useEffect, useRef } from 'react';
 import PixelApp from './PixelApp';
 
-// session ID (string) → numeric agent ID
+// session ID (string) → numeric agent ID（双向映射）
 const sessionToId = new Map();
+const idToSession = new Map();
 let nextAgentId = 1;
 function getAgentId(sessionId) {
-  if (!sessionToId.has(sessionId)) sessionToId.set(sessionId, nextAgentId++);
+  if (!sessionToId.has(sessionId)) {
+    const id = nextAgentId++;
+    sessionToId.set(sessionId, id);
+    idToSession.set(id, sessionId);
+  }
   return sessionToId.get(sessionId);
 }
 
-export default function PixelView({ ws, activeSessions }) {
+export default function PixelView({ ws, activeSessions, onFocusSession }) {
   const initializedRef = useRef(false);
 
   // 把 activeSessions 转成 pixel-agents 期望的 window message
   useEffect(() => {
-    // 即使 activeSessions 为空也要初始化 layout
+    const agentIds = activeSessions.map(s => getAgentId(s.sessionId));
+    // 必须先发 existingAgents（buffer），再发 layoutLoaded（触发 addAgent）
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'existingAgents', agents: agentIds, agentMeta: {} }
+    }));
     if (!initializedRef.current) {
       initializedRef.current = true;
       window.dispatchEvent(new MessageEvent('message', {
         data: { type: 'layoutLoaded', layout: null }
       }));
     }
-    const agentIds = activeSessions.map(s => getAgentId(s.sessionId));
-    // 发送 existingAgents
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'existingAgents', agents: agentIds, agentMeta: {} }
-    }));
   }, [activeSessions.map(s => s.sessionId).join(',')]);
+
+  // 监听 vscode.postMessage 转发的 pixel:postMessage 事件
+  useEffect(() => {
+    function onPixelMessage(e) {
+      const msg = e.detail;
+      if (msg?.type === 'focusAgent') {
+        const sessionId = idToSession.get(msg.id);
+        if (sessionId && onFocusSession) {
+          onFocusSession(sessionId);
+        }
+      }
+    }
+    window.addEventListener('pixel:postMessage', onPixelMessage);
+    return () => window.removeEventListener('pixel:postMessage', onPixelMessage);
+  }, [onFocusSession]);
+
+  // 监听 hook:event（来自 Dashboard ws 消息），更新小人状态
+  useEffect(() => {
+    function onHookEvent(e) {
+      const { hookEvent, sessionId } = e.detail || {};
+      if (!sessionId) return;
+      const id = getAgentId(sessionId);
+      // Stop → idle，Notification → waiting（用 'idle' 表示等待用户）
+      const status = hookEvent === 'Stop' ? 'idle' : 'waiting';
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'agentStatus', id, status }
+      }));
+    }
+    window.addEventListener('hook:event', onHookEvent);
+    return () => window.removeEventListener('hook:event', onHookEvent);
+  }, []);
 
   // WebSocket agent_status → pixel-agents window messages
   useEffect(() => {
@@ -63,3 +98,4 @@ export default function PixelView({ ws, activeSessions }) {
     </div>
   );
 }
+

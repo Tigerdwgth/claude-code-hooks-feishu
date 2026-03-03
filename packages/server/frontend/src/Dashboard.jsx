@@ -6,6 +6,7 @@ import PixelView from './PixelView';
 import MarkdownPreview from './MarkdownPreview';
 import { useTheme } from './theme';
 import useResizable from './useResizable';
+import { playSound } from './sound';
 
 export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const T = useTheme();
@@ -65,6 +66,12 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
           if (msg.error) { alert(`文件读取失败: ${msg.error}`); }
           else { setMdPreview({ path: msg.path, content: msg.content }); setViewMode('markdown'); }
         }
+        if (msg.type === 'hook_event') {
+          // 播放声音提醒
+          playSound(msg.hookEvent);
+          // 通知 PixelView 更新小人状态
+          window.dispatchEvent(new CustomEvent('hook:event', { detail: msg }));
+        }
       } catch {}
     };
     ws.onerror = (e) => console.error('[dashboard] WebSocket error:', e);
@@ -113,13 +120,14 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
       );
     }
     setActive({ machineId, sessionId });
+    setViewMode('terminal');
     if (isMobile) setMobileMenuOpen(false);
   }
 
-  function launchInDir(cwd) {
+  function launchInDir(cwd, command) {
     const mid = sessions[0]?.machineId || activeSessions[0]?.machineId || 'local-dev';
     const sessionId = `new-${Date.now()}`;
-    openTerminal(mid, sessionId, ['claude'], cwd);
+    openTerminal(mid, sessionId, command || ['claude'], cwd);
   }
 
   function previewMd(filePath) {
@@ -134,8 +142,8 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   }
 
   function stopSession(machineId, sessionId) {
-    if (!confirm('确定停止此 session？进程将被终止。')) return;
-    wsRef.current?.send(JSON.stringify({ type: 'close_terminal', machineId, sessionId }));
+    if (!confirm('确定停止此 session？claude 进程将被终止。')) return;
+    wsRef.current?.send(JSON.stringify({ type: 'stop_terminal', machineId, sessionId }));
     setOpenTerminals(prev => prev.filter(t => t.sessionId !== sessionId));
     if (active?.sessionId === sessionId) setActive(null);
   }
@@ -398,17 +406,10 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
             </button>
           </div>
 
-          {/* 内容区 */}
-          {viewMode === 'pixel' ? (
-            <PixelView ws={wsRef.current} activeSessions={activeSessions} />
-          ) : viewMode === 'markdown' && mdPreview ? (
-            <MarkdownPreview
-              path={mdPreview.path}
-              content={mdPreview.content}
-              onClose={() => { setMdPreview(null); setViewMode('terminal'); }}
-            />
-          ) : (
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* 内容区：终端始终挂载，避免切视图时 xterm 实例被销毁 */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+            {/* 终端层（始终挂载，仅在非终端视图时隐藏） */}
+            <div style={{ flex: 1, display: viewMode === 'terminal' ? 'flex' : 'none', overflow: 'hidden' }}>
               {openTerminals.map(t => (
                 <TerminalPanel
                   key={t.sessionId}
@@ -444,7 +445,42 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
                 </div>
               )}
             </div>
-          )}
+
+            {/* 像素视图层 */}
+            {viewMode === 'pixel' && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <PixelView ws={wsRef.current} activeSessions={(() => {
+                  // 合并 activeSessions（服务器扫描）和 openTerminals（浏览器打开），去重
+                  const merged = [...activeSessions];
+                  for (const t of openTerminals) {
+                    if (!merged.some(s => s.sessionId === t.sessionId)) merged.push(t);
+                  }
+                  return merged;
+                })()} onFocusSession={(sessionId) => {
+                  // 找到对应 session，切换到终端视图并激活
+                  const found = [...openTerminals, ...activeSessions].find(s => s.sessionId === sessionId);
+                  if (found) {
+                    setActive({ machineId: found.machineId, sessionId });
+                    setViewMode('terminal');
+                  } else {
+                    // session 不在已打开列表，直接切回终端视图
+                    setViewMode('terminal');
+                  }
+                }} />
+              </div>
+            )}
+
+            {/* Markdown 预览层 */}
+            {viewMode === 'markdown' && mdPreview && (
+              <div style={{ position: 'absolute', inset: 0, background: T.bgBase, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <MarkdownPreview
+                  path={mdPreview.path}
+                  content={mdPreview.content}
+                  onClose={() => { setMdPreview(null); setViewMode('terminal'); }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

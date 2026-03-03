@@ -124,6 +124,46 @@ Hook 读取响应 → 输出决策给 Claude Code ← 继续/停止
                                        (React 前端)
 ```
 
+### 推荐：使用 Tailscale 内网部署（安全 + 零配置）
+
+**为什么推荐 Tailscale？**
+- 端到端加密（WireGuard），无需配置 HTTPS
+- 无需公网暴露端口，无需配置防火墙
+- 跨设备访问（手机、平板、笔记本）
+- 零配置 NAT 穿透
+
+**部署步骤**：
+
+1. 在中央服务器和所有开发机上安装 Tailscale：
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+2. 在中央服务器上部署（见下方"部署中央服务器"），配置 `server.host` 为 Tailscale IP：
+```json
+{
+  "server": {
+    "port": 3000,
+    "host": "100.x.x.x"  // 你的 Tailscale IP（运行 tailscale ip -4 查看）
+  }
+}
+```
+
+3. 开发机配置 `centralServer.url` 使用 Tailscale 主机名：
+```json
+{
+  "centralServer": {
+    "enabled": true,
+    "url": "ws://your-server-hostname:3000/ws"  // Tailscale 主机名
+  }
+}
+```
+
+4. 浏览器访问 `http://your-server-hostname:3000`（需在 Tailscale 网络内）
+
+---
+
 ### 部署中央服务器（Ubuntu）
 
 **1. 安装 Node.js**
@@ -158,11 +198,26 @@ node -e "const {randomUUID}=require('crypto'); console.log(randomUUID())"
 
 ```bash
 cd /opt/claude-hooks-feishu
-MACHINE_TOKENS=<token1>,<token2> JWT_SECRET=<随机字符串> \
-  node packages/server/index.js --create-user admin
+node packages/server/index.js --create-user admin
 ```
 
-**5. 配置 systemd 服务**
+输入密码后，系统会创建管理员账号。
+
+**5. 配置服务器绑定地址**
+
+编辑 `~/.claude-hooks-feishu/config.json`：
+
+```json
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",  // 公网部署用 0.0.0.0；Tailscale 部署用 Tailscale IP
+    "machineTokens": ["<token1>", "<token2>"]
+  }
+}
+```
+
+**6. 配置 systemd 服务**
 
 ```bash
 cat > /etc/systemd/system/claude-dashboard.service << 'EOF'
@@ -175,8 +230,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/claude-hooks-feishu
 Environment=PORT=3000
-Environment=JWT_SECRET=<你的随机字符串>
-Environment=MACHINE_TOKENS=<token1>,<token2>
+Environment=JWT_SECRET=<生成随机字符串>
 ExecStart=/root/.nvm/versions/node/v25.8.0/bin/node packages/server/index.js
 Restart=always
 RestartSec=5
@@ -190,7 +244,7 @@ systemctl enable claude-dashboard
 systemctl start claude-dashboard
 ```
 
-**6. Nginx 反代配置（支持 WebSocket）**
+**7. （可选）Nginx 反代配置（支持 WebSocket）**
 
 ```nginx
 server {
@@ -218,8 +272,8 @@ server {
 {
   "centralServer": {
     "enabled": true,
-    "url": "ws://your-server.com/ws",
-    "machineToken": "<该机器对应的 token>",
+    "url": "ws://your-server:3000/ws",  // Tailscale 主机名或公网域名
+    "machineToken": "<该机器的 token>",
     "machineId": "dev-machine-1"
   }
 }
@@ -239,7 +293,7 @@ npx claude-code-hooks-feishu --daemon start
 
 ### 访问
 
-浏览器打开 `http://your-server.com/`，用管理员账号登录，即可看到所有已连接开发机的 session 列表，点击 session 打开完整 PTY 终端。
+浏览器打开服务器地址（Tailscale 主机名或公网域名），用管理员账号登录，即可看到所有已连接开发机的 session 列表，点击 session 打开完整 PTY 终端。
 
 ## 配置文件
 

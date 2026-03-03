@@ -54,6 +54,18 @@ async function main() {
   const type = resolveEventType(hookEvent, {});
   const fields = buildFields(hookEvent, data);
 
+  // 写 hook 事件到 IPC 目录，供 daemon 轮询后转发给浏览器（小人状态 + 声音提醒）
+  try {
+    const { getIpcDir } = require('../lib/ipc');
+    const fs = require('node:fs');
+    const ipcDir = getIpcDir();
+    fs.mkdirSync(ipcDir, { recursive: true });
+    const evtFile = require('node:path').join(ipcDir, `evt-${Date.now()}-${sessionId.slice(0, 8)}.json`);
+    fs.writeFileSync(evtFile, JSON.stringify({
+      hookEvent, sessionId, machineId, cwd, timestamp: Date.now()
+    }));
+  } catch {}
+
   await send({ type, cwd, fields });
 }
 

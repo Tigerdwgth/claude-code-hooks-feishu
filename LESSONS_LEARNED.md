@@ -1,3 +1,14 @@
+## 2026-03-03: 公网暴露 Dashboard 端口的安全风险
+
+**问题**: Web Dashboard 服务器默认绑定 `0.0.0.0`，在公网 IP 上监听 3000 端口，虽然有 JWT 认证，但仍存在暴露面过大的风险（端口扫描、暴力破解、DDoS）。
+
+**修复**:
+1. 增加 `server.host` 配置项，支持绑定到指定 IP（如 Tailscale IP）
+2. 推荐使用 Tailscale 内网部署 — 服务器绑定 Tailscale IP，只有 Tailscale 网络内设备可访问
+3. 通信走 WireGuard 加密隧道，无需配置 HTTPS
+
+**教训**: 内部工具应优先考虑内网部署（VPN/Tailscale），而非直接暴露公网。Tailscale 提供零配置的安全内网方案，适合多机协作场景。
+
 # Lessons Learned
 
 ## 2026-02-27: Relay 单 session watching 导致并列模式失效
@@ -65,7 +76,13 @@
 2. 启动 daemon（自动启动 ws-client 连接 server）— `startDaemon(appId, appSecret)`
 3. daemon 配置中 `centralServer.machineToken` 必须在 server 的 `MACHINE_TOKENS` 列表中
 
-**教训**: 分布式系统启动时，认证凭据必须两端匹配。Server 端的 `MACHINE_TOKENS` env var 和 client 端的 `centralServer.machineToken` config 缺一不可。建议将启动命令写成脚本或 systemd unit，避免每次手动输入遗漏环境变量。
+**教训**: 分布式系统启动时，认证凭据必须两端匹配。已通过 CLI `--server start` 命令自动从 config 读取 `server.machineTokens` 注入，无需手动设置环境变量。
+
+**启动方式**:
+```bash
+npx claude-code-hooks-feishu --server start   # 启动 Web Dashboard
+npx claude-code-hooks-feishu --daemon start   # 启动飞书 daemon + ws-client
+```
 
 ## 2026-02-28: _readFile 白名单安全检查导致非 home 目录文件无法读取
 

@@ -1,5 +1,69 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './theme';
+
+const CLI_CMDS = [
+  { label: 'claude', cmd: ['claude'] },
+  { label: 'codex',  cmd: ['codex'] },
+  { label: 'gemini', cmd: ['gemini'] },
+];
+
+function LaunchMenu({ path, onLaunch, T }) {
+  const [hovered, setHovered] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+
+  function handleMouseEnter() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: r.top + r.height / 2, left: r.right + 4 });
+    }
+    setHovered(true);
+  }
+
+  return (
+    <div
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        ref={btnRef}
+        className="dir-launch"
+        title={`在 ${path} 启动`}
+        onClick={() => onLaunch(path, ['claude'])}
+        style={{
+          background: 'none', border: `1px solid ${T.border}`,
+          color: T.textMuted, borderRadius: '4px',
+          cursor: 'pointer', padding: '1px 5px', fontSize: '0.65rem',
+          flexShrink: 0, transition: 'all 0.12s',
+        }}
+      >▶</button>
+      {hovered && (
+        <div style={{
+          position: 'fixed',
+          top: menuPos.top,
+          left: menuPos.left,
+          transform: 'translateY(-50%)',
+          display: 'flex', gap: '3px', zIndex: 9999,
+        }}>
+          {CLI_CMDS.map(({ label, cmd }) => (
+            <button
+              key={label}
+              onMouseDown={e => { e.preventDefault(); onLaunch(path, cmd); }}
+              style={{
+                background: T.bgCard, border: `1px solid ${T.borderAccent}`,
+                color: T.accent, borderRadius: '4px',
+                cursor: 'pointer', padding: '1px 6px', fontSize: '0.65rem',
+                fontFamily: 'monospace', whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >{label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DirTree({ ws, machineId, rootPath, onLaunch, onPreviewMd }) {
   const T = useTheme();
@@ -55,17 +119,7 @@ function DirTree({ ws, machineId, rootPath, onLaunch, onPreviewMd }) {
                 >
                   {entry.name}
                 </span>
-                <button
-                  className="dir-launch"
-                  title={`在 ${entry.path} 启动`}
-                  onClick={() => onLaunch(entry.path)}
-                  style={{
-                    background: 'none', border: `1px solid ${T.border}`,
-                    color: T.textMuted, borderRadius: '4px',
-                    cursor: 'pointer', padding: '1px 5px', fontSize: '0.65rem',
-                    flexShrink: 0, transition: 'all 0.12s',
-                  }}
-                >▶</button>
+                <LaunchMenu path={entry.path} onLaunch={onLaunch} T={T} />
               </>
             ) : (
               <>
@@ -142,12 +196,12 @@ export default function FileBrowser({ ws, machineId, historySessions, onLaunch, 
       </div>
 
       {/* 手动输入 */}
-      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: '0.5rem', display: 'flex', gap: '4px' }}>
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: '0.5rem', display: 'flex', gap: '4px', alignItems: 'center' }}>
         <input
           className="path-input"
           value={manualPath}
           onChange={e => setManualPath(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && manualPath && onLaunch(manualPath)}
+          onKeyDown={e => e.key === 'Enter' && manualPath && onLaunch(manualPath, ['claude'])}
           placeholder="输入路径…"
           style={{
             flex: 1, background: T.bgInput, border: `1px solid ${T.border}`,
@@ -156,14 +210,11 @@ export default function FileBrowser({ ws, machineId, historySessions, onLaunch, 
             fontFamily: T.fontMono, transition: 'border-color 0.15s',
           }}
         />
-        <button
-          onClick={() => manualPath && onLaunch(manualPath)}
-          style={{
-            background: T.accent, border: 'none', color: '#fff',
-            borderRadius: T.radiusSm, cursor: 'pointer',
-            padding: '4px 10px', fontSize: '0.75rem',
-          }}
-        >▶</button>
+        <LaunchMenu
+          path={manualPath}
+          onLaunch={(path, cmd) => path && onLaunch(path, cmd)}
+          T={T}
+        />
       </div>
     </div>
   );

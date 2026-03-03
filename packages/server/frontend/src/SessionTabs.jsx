@@ -13,6 +13,16 @@ function timeAgo(ts) {
   return `${Math.floor(h / 24)}d`;
 }
 
+// machineId 太长时取前段作为友好名称显示
+function shortMachineId(mid) {
+  if (!mid || mid === 'local') return 'local';
+  // 形如 "aibox-r061c3847202-cdb678b8b-h5jjf" → "aibox"
+  // 形如 "server-47115" → "server-47115"（本身就短）
+  const parts = mid.split('-');
+  if (parts.length <= 2) return mid;
+  return parts.slice(0, 2).join('-');
+}
+
 const itemStyle = (T, selected) => ({
   padding: '0.35rem 0.6rem',
   cursor: 'pointer',
@@ -48,9 +58,9 @@ function OpenedTab({ openTerminals, active, onOpen, onStop }) {
       <style>{`.sess-item:hover { background: ${T.bgHover} !important; color: ${T.textPrimary} !important; }`}</style>
       {Object.entries(byMachine).map(([machineId, terms]) => (
         <div key={machineId} style={{ marginBottom: '0.75rem' }}>
-          <div style={machineBadge(T)}>
+          <div style={machineBadge(T)} title={machineId}>
             <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: T.accent, display: 'inline-block' }} />
-            {machineId}
+            {shortMachineId(machineId)}
           </div>
           {terms.map(t => (
             <div
@@ -98,9 +108,9 @@ function RunningTab({ activeSessions, active, onOpen, onStop }) {
       <style>{`.sess-item:hover { background: ${T.bgHover} !important; color: ${T.textPrimary} !important; }`}</style>
       {Object.entries(byMachine).map(([machineId, sess]) => (
         <div key={machineId} style={{ marginBottom: '0.75rem' }}>
-          <div style={machineBadge(T)}>
+          <div style={machineBadge(T)} title={machineId}>
             <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: T.success, display: 'inline-block' }} />
-            {machineId}
+            {shortMachineId(machineId)}
           </div>
           {sess.map(s => (
             <div
@@ -141,6 +151,83 @@ function HistoryTab({ historySessions, active, onOpen, onDelete }) {
   const T = useTheme();
   const [hovered, setHovered] = useState(null);
 
+  const byMachine = historySessions.reduce((acc, s) => {
+    const mid = s.machineId || 'local';
+    (acc[mid] = acc[mid] || []).push(s);
+    return acc;
+  }, {});
+
+  const renderSession = (s) => (
+    <div
+      key={s.sessionId}
+      className="hist-item"
+      onMouseEnter={() => setHovered(s.sessionId)}
+      onMouseLeave={() => setHovered(null)}
+      style={{
+        ...itemStyle(T, active?.sessionId === s.sessionId),
+        flexDirection: 'column', alignItems: 'stretch', gap: '2px',
+        padding: '0.4rem 0.6rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        <span style={{ color: T.textPrimary, fontSize: '0.78rem', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {s.cwd?.split('/').pop() || '/'}
+        </span>
+        {s.gitBranch && (
+          <span style={{
+            background: T.accentDim, color: T.accent,
+            borderRadius: T.radiusPill, padding: '1px 6px',
+            fontSize: '0.62rem', fontWeight: 500, flexShrink: 0,
+          }}>{s.gitBranch}</span>
+        )}
+        <span style={{ color: T.textMuted, fontSize: '0.62rem', flexShrink: 0 }}>
+          {s.timestamp?.slice(0, 10)}
+        </span>
+      </div>
+      {s.summary ? (
+        <div style={{ color: T.textMuted, fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {s.summary}
+        </div>
+      ) : (
+        <span style={{ background: T.bgHover, color: T.textMuted, borderRadius: T.radiusPill, padding: '1px 6px', fontSize: '0.6rem' }}>空会话</span>
+      )}
+      <div className="hist-actions" style={{ display: 'flex', gap: '4px', marginTop: '3px' }}>
+        <button
+          className="hist-btn"
+          title="在此目录启动 claude"
+          onClick={e => { e.stopPropagation(); onOpen(s.machineId || 'local', s.sessionId, ['claude'], s.cwd); }}
+          style={{
+            background: T.bgCard, border: `1px solid ${T.border}`,
+            color: T.success, borderRadius: '4px',
+            cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
+            fontFamily: T.fontSans, transition: 'background 0.12s',
+          }}>▶ 新建</button>
+        <button
+          className="hist-btn"
+          title={`claude --resume ${s.sessionId}`}
+          onClick={e => { e.stopPropagation(); onOpen(s.machineId || 'local', s.sessionId, ['claude', '--resume', s.sessionId], s.cwd); }}
+          style={{
+            background: T.bgCard, border: `1px solid ${T.border}`,
+            color: T.accent, borderRadius: '4px',
+            cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
+            fontFamily: T.fontSans, transition: 'background 0.12s',
+          }}>↩ 恢复</button>
+        {onDelete && (
+        <button
+          className="hist-btn"
+          title="删除此 session"
+          onClick={e => { e.stopPropagation(); onDelete(s.machineId || 'local', s.sessionId); }}
+          style={{
+            background: T.bgCard, border: `1px solid ${T.border}`,
+            color: T.danger, borderRadius: '4px',
+            cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
+            fontFamily: T.fontSans, transition: 'background 0.12s',
+          }}>✕ 删除</button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
       <style>{`
@@ -149,74 +236,13 @@ function HistoryTab({ historySessions, active, onOpen, onDelete }) {
         .hist-item:hover .hist-actions { opacity: 1 !important; }
         .hist-btn:hover { background: ${T.bgBase} !important; }
       `}</style>
-      {historySessions.map(s => (
-        <div
-          key={s.sessionId}
-          className="hist-item"
-          onMouseEnter={() => setHovered(s.sessionId)}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            ...itemStyle(T, active?.sessionId === s.sessionId),
-            flexDirection: 'column', alignItems: 'stretch', gap: '2px',
-            padding: '0.4rem 0.6rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ color: T.textPrimary, fontSize: '0.78rem', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.cwd?.split('/').pop() || '/'}
-            </span>
-            {s.gitBranch && (
-              <span style={{
-                background: T.accentDim, color: T.accent,
-                borderRadius: T.radiusPill, padding: '1px 6px',
-                fontSize: '0.62rem', fontWeight: 500, flexShrink: 0,
-              }}>{s.gitBranch}</span>
-            )}
-            <span style={{ color: T.textMuted, fontSize: '0.62rem', flexShrink: 0 }}>
-              {s.timestamp?.slice(0, 10)}
-            </span>
+      {Object.entries(byMachine).map(([machineId, sessions]) => (
+        <div key={machineId} style={{ marginBottom: '0.75rem' }}>
+          <div style={machineBadge(T)} title={machineId}>
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: T.textMuted, display: 'inline-block' }} />
+            {shortMachineId(machineId)}
           </div>
-          {s.summary ? (
-            <div style={{ color: T.textMuted, fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.summary}
-            </div>
-          ) : (
-            <span style={{ background: T.bgHover, color: T.textMuted, borderRadius: T.radiusPill, padding: '1px 6px', fontSize: '0.6rem' }}>空会话</span>
-          )}
-          <div className="hist-actions" style={{ display: 'flex', gap: '4px', marginTop: '3px' }}>
-            <button
-              className="hist-btn"
-              title="在此目录启动 claude"
-              onClick={e => { e.stopPropagation(); onOpen(s.machineId || 'local', s.sessionId, ['claude'], s.cwd); }}
-              style={{
-                background: T.bgCard, border: `1px solid ${T.border}`,
-                color: T.success, borderRadius: '4px',
-                cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
-                fontFamily: T.fontSans, transition: 'background 0.12s',
-              }}>▶ 新建</button>
-            <button
-              className="hist-btn"
-              title={`claude --resume ${s.sessionId}`}
-              onClick={e => { e.stopPropagation(); onOpen(s.machineId || 'local', s.sessionId, ['claude', '--resume', s.sessionId], s.cwd); }}
-              style={{
-                background: T.bgCard, border: `1px solid ${T.border}`,
-                color: T.accent, borderRadius: '4px',
-                cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
-                fontFamily: T.fontSans, transition: 'background 0.12s',
-              }}>↩ 恢复</button>
-            {onDelete && (
-            <button
-              className="hist-btn"
-              title="删除此 session"
-              onClick={e => { e.stopPropagation(); onDelete(s.machineId || 'local', s.sessionId); }}
-              style={{
-                background: T.bgCard, border: `1px solid ${T.border}`,
-                color: T.danger, borderRadius: '4px',
-                cursor: 'pointer', padding: '1px 7px', fontSize: '0.7rem',
-                fontFamily: T.fontSans, transition: 'background 0.12s',
-              }}>✕ 删除</button>
-            )}
-          </div>
+          {sessions.map(renderSession)}
         </div>
       ))}
       {historySessions.length === 0 && <EmptyState text="无历史 session" />}

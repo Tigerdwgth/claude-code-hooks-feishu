@@ -91,8 +91,29 @@ async function main() {
   const relay = new RelayServer();
   const server = http.createServer(app);
   relay.attachToHttpServer(server);
-  server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  const host = process.env.HOST || '0.0.0.0';
+  server.listen(PORT, host, () => console.log(`Server running on http://${host}:${PORT}`));
 }
 
-main().catch(console.error);
-module.exports = { app };
+/**
+ * 启动 server（供 CLI --server start 调用）
+ * @param {{ port?: number, host?: string, machineTokens?: string[] }} opts
+ */
+function startServer(opts = {}) {
+  const port = opts.port || process.env.PORT || 3000;
+  const host = opts.host || process.env.HOST || '0.0.0.0';
+  const http = require('node:http');
+  const { RelayServer, addMachineTokens } = require('./relay');
+  if (opts.machineTokens?.length) addMachineTokens(opts.machineTokens);
+  const relay = new RelayServer();
+  const server = http.createServer(app);
+  relay.attachToHttpServer(server);
+  server.listen(port, host, () => console.log(`Server running on http://${host}:${port}`));
+  return server;
+}
+
+// 仅直接运行时执行 main()，被 require 时跳过
+if (require.main === module) {
+  main().catch(console.error);
+}
+module.exports = { app, startServer };

@@ -232,7 +232,10 @@ async function main() {
   console.log('  npx claude-code-hooks-feishu --remove       # 卸载');
   console.log('  npx claude-code-hooks-feishu --daemon start # 启动交互守护进程');
   console.log('  npx claude-code-hooks-feishu --daemon stop  # 停止守护进程');
-  console.log('  npx claude-code-hooks-feishu --daemon status# 查看状态\n');
+  console.log('  npx claude-code-hooks-feishu --daemon status# 查看状态');
+  console.log('  npx claude-code-hooks-feishu --server start # 启动 Web Dashboard');
+  console.log('  npx claude-code-hooks-feishu --server stop  # 停止 Web Dashboard');
+  console.log('  npx claude-code-hooks-feishu --server status# 查看 Dashboard 状态\n');
 
   rl.close();
 }
@@ -264,10 +267,13 @@ if (args.includes('--test')) {
   const sub = args[args.indexOf('--daemon') + 1] || 'status';
 
   if (sub === 'start') {
+    const hasCentralServer = cfg.centralServer?.enabled && cfg.centralServer?.url && cfg.centralServer?.machineToken;
     if (!cfg.app.enabled || !cfg.app.appId) {
-      console.log('❌ 请先配置飞书应用 (appId/appSecret)');
-      console.log('运行: npx claude-code-hooks-feishu');
-      process.exit(1);
+      if (!hasCentralServer) {
+        console.log('❌ 请先配置飞书应用 (appId/appSecret) 或 centralServer');
+        console.log('运行: npx claude-code-hooks-feishu');
+        process.exit(1);
+      }
     }
     const { startDaemon } = require('../lib/daemon');
     startDaemon(cfg.app.appId, cfg.app.appSecret).catch(e => {
@@ -286,6 +292,43 @@ if (args.includes('--test')) {
       console.log(`PID: ${pid}`);
     }
     console.log(`日志: ${getLogPath()}`);
+  }
+} else if (args.includes('--server')) {
+  const { loadConfig, getBaseDir } = require('../lib/config');
+  const cfg = loadConfig();
+  const sub = args[args.indexOf('--server') + 1] || 'status';
+  const serverCfg = cfg.server || {};
+  const pidPath = path.join(getBaseDir(), 'server.pid');
+
+  if (sub === 'start') {
+    const tokens = serverCfg.machineTokens || [];
+    if (tokens.length === 0) {
+      console.log('⚠️  未配置 server.machineTokens，开发机将无法连接');
+      console.log('请在 config.json 的 server.machineTokens 中添加 token');
+    }
+    // 设置 env 供 relay.js 读取（兼容旧逻辑）
+    process.env.MACHINE_TOKENS = tokens.join(',');
+    const port = serverCfg.port || 3000;
+    const host = serverCfg.host || '0.0.0.0';
+    const { startServer } = require('../packages/server/index');
+    startServer({ port, host, machineTokens: tokens });
+    fs.mkdirSync(path.dirname(pidPath), { recursive: true });
+    fs.writeFileSync(pidPath, String(process.pid));
+    process.on('SIGTERM', () => { try { fs.unlinkSync(pidPath); } catch {} process.exit(0); });
+    process.on('SIGINT', () => { try { fs.unlinkSync(pidPath); } catch {} process.exit(0); });
+  } else if (sub === 'stop') {
+    if (!fs.existsSync(pidPath)) { console.log('Server 未运行'); process.exit(0); }
+    const pid = parseInt(fs.readFileSync(pidPath, 'utf-8').trim(), 10);
+    try { process.kill(pid, 'SIGTERM'); console.log(`Server 已停止 (PID: ${pid})`); } catch { console.log('Server 已停止（进程不存在）'); }
+    try { fs.unlinkSync(pidPath); } catch {}
+  } else {
+    const running = fs.existsSync(pidPath) && (() => {
+      try { process.kill(parseInt(fs.readFileSync(pidPath, 'utf-8').trim(), 10), 0); return true; } catch { return false; }
+    })();
+    console.log(`Server 状态: ${running ? '✅ 运行中' : '❌ 未运行'}`);
+    if (running) console.log(`PID: ${fs.readFileSync(pidPath, 'utf-8').trim()}`);
+    console.log(`端口: ${serverCfg.port || 3000}`);
+    console.log(`Machine Tokens: ${(serverCfg.machineTokens || []).length} 个`);
   }
 } else if (args.includes('--remove')) {
   const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
