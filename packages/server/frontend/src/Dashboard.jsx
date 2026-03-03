@@ -5,6 +5,7 @@ import SessionTabs from './SessionTabs';
 import PixelView from './PixelView';
 import MarkdownPreview from './MarkdownPreview';
 import MachineSelector from './MachineSelector';
+import ChangePasswordModal from './ChangePasswordModal';
 import { useTheme } from './theme';
 import useResizable from './useResizable';
 import { playSound } from './sound';
@@ -26,6 +27,7 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
   const [isMobile, setIsMobile]             = useState(() => window.innerWidth < 768);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const wsRef = useRef(null);
 
   const machines = useMemo(() => {
@@ -289,6 +291,16 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
             }}>Sessions</span>
             <button
               className="sidebar-btn"
+              onClick={() => setShowPasswordModal(true)}
+              title="修改密码"
+              style={{
+                background: 'none', border: '1px solid transparent',
+                color: T.textMuted, borderRadius: T.radiusSm,
+                cursor: 'pointer', padding: '3px 6px', fontSize: '0.78rem',
+                transition: 'all 0.15s',
+              }}>🔑</button>
+            <button
+              className="sidebar-btn"
               onClick={() => setShowAddUser(true)}
               title="添加用户"
               style={{
@@ -510,6 +522,16 @@ export default function Dashboard({ token, onLogout, isDark, onToggleTheme }) {
       </div>
 
       {showAddUser && <AddUser token={token} onClose={() => setShowAddUser(false)} />}
+      {showPasswordModal && (
+        <ChangePasswordModal
+          onClose={() => setShowPasswordModal(false)}
+          onSuccess={() => {
+            setShowPasswordModal(false);
+            alert('密码修改成功，请重新登录');
+            onLogout();
+          }}
+        />
+      )}
     </>
   );
 }
