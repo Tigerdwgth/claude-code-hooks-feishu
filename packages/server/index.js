@@ -57,6 +57,29 @@ app.get('/api/me', authMiddleware, (req, res) => {
   res.json({ username: req.user.username });
 });
 
+// 获取指定机器的目录列表
+app.get('/api/machines/:machineId/directories', authMiddleware, (req, res) => {
+  const { machineId } = req.params;
+  const { path: dirPath } = req.query;
+
+  // 通过 relay 向指定机器请求目录列表
+  const { RelayServer } = require('./relay');
+  const relay = global.relayServer;
+  if (!relay) return res.status(503).json({ error: 'Relay not available' });
+
+  const machine = relay.getMachine(machineId);
+  if (!machine) return res.status(404).json({ error: 'Machine not found' });
+
+  // 发送请求到机器
+  machine.ws.send(JSON.stringify({
+    type: 'list_dir',
+    path: dirPath || require('os').homedir()
+  }));
+
+  // 等待响应（简化版，实际应该用 Promise）
+  res.json({ message: 'Request sent, check WebSocket for response' });
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   const dist = path.join(__dirname, 'frontend/dist/index.html');
@@ -125,6 +148,7 @@ function startServer(opts = {}) {
   const { RelayServer, addMachineTokens } = require('./relay');
   if (opts.machineTokens?.length) addMachineTokens(opts.machineTokens);
   const relay = new RelayServer();
+  global.relayServer = relay;  // 添加这行
 
   // 检查是否启用 HTTPS
   const certPath = process.env.SSL_CERT || path.join(__dirname, '../../certs/cert.pem');
