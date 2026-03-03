@@ -86,29 +86,67 @@ async function main() {
     return;
   }
 
-  const http = require('node:http');
+  const fs = require('node:fs');
   const { RelayServer } = require('./relay');
   const relay = new RelayServer();
-  const server = http.createServer(app);
-  relay.attachToHttpServer(server);
   const host = process.env.HOST || '0.0.0.0';
-  server.listen(PORT, host, () => console.log(`Server running on http://${host}:${PORT}`));
+
+  // 检查是否启用 HTTPS
+  const certPath = process.env.SSL_CERT || path.join(__dirname, '../../certs/cert.pem');
+  const keyPath = process.env.SSL_KEY || path.join(__dirname, '../../certs/key.pem');
+  const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
+
+  let server;
+  if (useHttps) {
+    const https = require('node:https');
+    const options = {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath)
+    };
+    server = https.createServer(options, app);
+    relay.attachToHttpServer(server);
+    server.listen(PORT, host, () => console.log(`Server running on https://${host}:${PORT}`));
+  } else {
+    const http = require('node:http');
+    server = http.createServer(app);
+    relay.attachToHttpServer(server);
+    server.listen(PORT, host, () => console.log(`Server running on http://${host}:${PORT}`));
+  }
 }
 
 /**
  * 启动 server（供 CLI --server start 调用）
- * @param {{ port?: number, host?: string, machineTokens?: string[] }} opts
+ * @param {{ port?: number, host?: string, machineTokens?: string[], useHttps?: boolean }} opts
  */
 function startServer(opts = {}) {
   const port = opts.port || process.env.PORT || 3000;
   const host = opts.host || process.env.HOST || '0.0.0.0';
-  const http = require('node:http');
+  const fs = require('node:fs');
   const { RelayServer, addMachineTokens } = require('./relay');
   if (opts.machineTokens?.length) addMachineTokens(opts.machineTokens);
   const relay = new RelayServer();
-  const server = http.createServer(app);
-  relay.attachToHttpServer(server);
-  server.listen(port, host, () => console.log(`Server running on http://${host}:${port}`));
+
+  // 检查是否启用 HTTPS
+  const certPath = process.env.SSL_CERT || path.join(__dirname, '../../certs/cert.pem');
+  const keyPath = process.env.SSL_KEY || path.join(__dirname, '../../certs/key.pem');
+  const useHttps = opts.useHttps !== false && fs.existsSync(certPath) && fs.existsSync(keyPath);
+
+  let server;
+  if (useHttps) {
+    const https = require('node:https');
+    const options = {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath)
+    };
+    server = https.createServer(options, app);
+    relay.attachToHttpServer(server);
+    server.listen(port, host, () => console.log(`Server running on https://${host}:${port}`));
+  } else {
+    const http = require('node:http');
+    server = http.createServer(app);
+    relay.attachToHttpServer(server);
+    server.listen(port, host, () => console.log(`Server running on http://${host}:${port}`));
+  }
   return server;
 }
 
