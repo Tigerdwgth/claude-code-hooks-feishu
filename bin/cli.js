@@ -235,7 +235,9 @@ async function main() {
   console.log('  npx claude-code-hooks-feishu --daemon status# 查看状态');
   console.log('  npx claude-code-hooks-feishu --server start # 启动 Web Dashboard');
   console.log('  npx claude-code-hooks-feishu --server stop  # 停止 Web Dashboard');
-  console.log('  npx claude-code-hooks-feishu --server status# 查看 Dashboard 状态\n');
+  console.log('  npx claude-code-hooks-feishu --server status# 查看 Dashboard 状态');
+  console.log('  sudo npx claude-code-hooks-feishu --deploy dashboard # 部署为 Dashboard 服务器（systemd 自启动）');
+  console.log('  sudo npx claude-code-hooks-feishu --deploy client    # 部署为客户端（systemd 自启动）\\n');
 
   rl.close();
 }
@@ -349,6 +351,27 @@ if (args.includes('--test')) {
   const baseDir = getBaseDir();
   if (fs.existsSync(baseDir)) fs.rmSync(baseDir, { recursive: true });
   console.log('✅ 已卸载 claude-code-hooks-feishu');
+} else if (args.includes('--deploy')) {
+  const { deployDashboard, deployClient } = require('../lib/deploy');
+  const sub = args[args.indexOf('--deploy') + 1] || '';
+
+  if (sub === 'dashboard') {
+    deployDashboard().catch(e => {
+      console.error('部署失败:', e.message);
+      process.exit(1);
+    });
+  } else if (sub === 'client') {
+    deployClient().catch(e => {
+      console.error('部署失败:', e.message);
+      process.exit(1);
+    });
+  } else {
+    console.error('❌ 请指定部署模式: dashboard 或 client');
+    console.log('\n用法:');
+    console.log('  sudo node bin/cli.js --deploy dashboard  # 部署为 Dashboard 服务器');
+    console.log('  sudo node bin/cli.js --deploy client     # 部署为客户端（开发机）');
+    process.exit(1);
+  }
 } else {
   main().catch(console.error);
 }

@@ -67,7 +67,60 @@ npx claude-code-hooks-feishu --remove       # 卸载
 npx claude-code-hooks-feishu --daemon start # 启动交互守护进程
 npx claude-code-hooks-feishu --daemon stop  # 停止守护进程
 npx claude-code-hooks-feishu --daemon status# 查看守护进程状态
+
+# 部署命令（systemd 自启动）
+sudo npx claude-code-hooks-feishu --deploy dashboard  # 部署为 Dashboard 服务器
+sudo npx claude-code-hooks-feishu --deploy client     # 部署为客户端（开发机）
 ```
+
+## 生产部署
+
+### Dashboard 服务器部署
+
+在中央服务器上部署 Web Dashboard，支持 systemd 自启动：
+
+```bash
+# 1. 配置 Dashboard
+node bin/cli.js
+# 在配置向导中设置 server.machineTokens
+
+# 2. 部署为 systemd 服务
+sudo node bin/cli.js --deploy dashboard
+
+# 3. 查看状态
+sudo systemctl status claude-dashboard
+sudo journalctl -u claude-dashboard -f
+```
+
+部署特性：
+- 自动检测 Tailscale IP 并绑定（内网专用）
+- systemd 服务自动重启
+- 开机自启动
+- 日志输出到 journalctl
+
+### 客户端（开发机）部署
+
+在开发机上部署 daemon，连接到中央服务器：
+
+```bash
+# 1. 配置客户端
+node bin/cli.js
+# 在配置向导中配置飞书应用和中央服务器地址
+
+# 2. 部署为 systemd 服务
+sudo node bin/cli.js --deploy client
+
+# 3. 查看状态
+sudo systemctl status claude-hooks-daemon
+sudo journalctl -u claude-hooks-daemon -f
+```
+
+部署特性：
+- daemon 自动启动（飞书交互 + WebSocket 连接）
+- systemd 服务自动重启
+- 开机自启动
+- 日志输出到 journalctl
+
 
 ## 双向交互（v2.0）
 

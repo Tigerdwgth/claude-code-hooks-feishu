@@ -1,3 +1,30 @@
+## 2026-03-03: 新增 systemd 部署命令实现生产环境自启动
+
+**需求**: 在生产环境中，Dashboard 服务器和客户端 daemon 需要开机自启动，并在崩溃时自动重启。
+
+**实现**:
+1. 新增 `lib/deploy.js` 模块，提供 `deployDashboard()` 和 `deployClient()` 函数
+2. 在 `bin/cli.js` 中添加 `--deploy dashboard` 和 `--deploy client` 命令
+3. 自动生成 systemd service 文件：
+   - `/etc/systemd/system/claude-dashboard.service` — Dashboard 服务器
+   - `/etc/systemd/system/claude-hooks-daemon.service` — 客户端 daemon
+4. 自动检测 Tailscale IP 并提示绑定（Dashboard 模式）
+5. 自动从配置文件读取必要参数（端口、token、appId 等）
+
+**关键特性**:
+- 需要 root 权限（sudo）
+- 自动 `systemctl enable` 实现开机自启动
+- `Restart=always` + `RestartSec=10` 实现崩溃自动重启
+- 日志输出到 journalctl，便于排查问题
+- 自动检测 node 路径和项目根目录
+
+**教训**: 生产部署工具应该：
+1. 自动化所有配置步骤，减少人工错误
+2. 提供清晰的权限检查和错误提示
+3. 支持自动检测环境（如 Tailscale IP）
+4. 使用系统标准的服务管理工具（systemd）
+5. 提供完整的状态查看命令
+
 ## 2026-03-03: 公网暴露 Dashboard 端口的安全风险
 
 **问题**: Web Dashboard 服务器默认绑定 `0.0.0.0`，在公网 IP 上监听 3000 端口，虽然有 JWT 认证，但仍存在暴露面过大的风险（端口扫描、暴力破解、DDoS）。
